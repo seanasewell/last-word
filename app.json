@@ -28,7 +28,9 @@
       },
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.SYSTEM_ALERT_WINDOW"
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -64,6 +66,17 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "85324afb-3ded-4ebb-9e94-1d8548e683b9"
+      }
+    },
+    "owner": "seanasewells-team"
   }
 }
