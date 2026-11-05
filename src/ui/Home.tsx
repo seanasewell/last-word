@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { accounts, weekRange, winsFor, type Account, type Period } from '@/lib/account';
 import { engine, type GameState } from '@/lib/engine';
-import { buildRanking, type RankEntry, type Scope } from '@/lib/ranks';
+import { fetchLeaderboard, type Leaderboard, type RankEntry, type Scope } from '@/lib/ranks';
 import { COUNTRIES, countryByCode, maskPhone } from '@/lib/regions';
 import { scoreWord } from '@/lib/words';
 import { cleanName, DevControls, NAME_MAX, nameError } from './Auth';
@@ -179,14 +179,25 @@ function RankRow({ e, scope }: { e: RankEntry; scope: Scope }) {
   );
 }
 
-function RanksTab({ account }: { account: Account }) {
+function RanksTab({ account, refreshKey }: { account: Account; refreshKey: number }) {
   const [scope, setScope] = useState<Scope>('world');
   const [period, setPeriod] = useState<Period>('week');
+  const [board, setBoard] = useState<{ key: string; data: Leaderboard } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const country = countryByCode(account.country);
-  const myWins = winsFor(account, period);
   const now = useNow(true, 30_000);
-  const day = new Date(now).toDateString();
-  const { entries, you } = useMemo(() => buildRanking(scope, account, myWins, period), [scope, account, myWins, period, day]); // eslint-disable-line react-hooks/exhaustive-deps
+  const key = `${scope}-${period}`;
+
+  // Load the board for the current scope and period (and on pull-to-refresh).
+  const myWinsLocal = winsFor(account, period);
+  useEffect(() => {
+    let live = true;
+    fetchLeaderboard(scope, period)
+      .then((data) => { if (live) { setBoard({ key: `${scope}-${period}`, data }); setError(null); } })
+      .catch(() => { if (live) setError("Couldn't load rankings. Pull down to try again."); });
+    return () => { live = false; };
+  }, [scope, period, refreshKey, myWinsLocal]);
+
   const scopes: { id: Scope; label: string }[] = [
     { id: 'world', label: '🌍 World' },
     { id: 'national', label: `${country.flag} National` },
@@ -195,6 +206,10 @@ function RanksTab({ account }: { account: Account }) {
   const p = PERIODS.find((x) => x.id === period)!;
   const scopeName = scope === 'world' ? 'in the world' : scope === 'national' ? `in ${country.name}` : `in ${account.region}`;
   const reset = resetText(period, now);
+  const data = board?.key === key ? board.data : null;
+  const you = data?.you ?? null;
+  const myWins = you?.wins ?? myWinsLocal;
+
   return (
     <View>
       <Text style={s.h1}>Ranks</Text>
@@ -207,7 +222,7 @@ function RanksTab({ account }: { account: Account }) {
         <Avatar player={meAvatar(account)} size={44} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.6) }}>Your rank {scopeName}</Text>
-          <Text style={{ fontFamily: F.display, fontSize: 24, color: C.white }}>{ordinal(you.rank)}</Text>
+          <Text style={{ fontFamily: F.display, fontSize: 24, color: C.white }}>{you ? ordinal(you.rank) : data ? 'Not ranked yet' : '…'}</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={[{ fontFamily: F.display, fontSize: 24, color: C.mint }, s.tabular]}>{myWins}</Text>
@@ -215,16 +230,30 @@ function RanksTab({ account }: { account: Account }) {
         </View>
       </View>
       {reset && <Text style={{ alignSelf: 'flex-end', marginTop: 8, fontFamily: F.body, fontSize: 11, color: w(0.45) }}>{reset}</Text>}
-      <View style={{ gap: 6, marginTop: 8 }}>
-        {entries.map((e) => <RankRow key={e.id} e={e} scope={scope} />)}
-        {!entries.some((e) => e.isYou) && (
-          <>
-            <Text style={{ textAlign: 'center', color: w(0.35), paddingVertical: 2 }}>⋯</Text>
-            <RankRow e={you} scope={scope} />
-          </>
-        )}
-      </View>
-      <Text style={{ textAlign: 'center', marginTop: 20, fontFamily: F.body, fontSize: 11, lineHeight: 16, color: w(0.4) }}>Other players shown are sample entries until online play launches. Your wins are counted from matches on this phone.</Text>
+
+      {error && !data && <Text style={{ marginTop: 24, textAlign: 'center', fontFamily: F.body, fontSize: 14, color: C.coral }}>{error}</Text>}
+      {!error && !data && <ActivityIndicator color={C.primary} style={{ marginTop: 32 }} />}
+      {data && data.entries.length === 0 && (
+        <Card style={{ marginTop: 12, padding: 20, alignItems: 'center' }}>
+          <Text style={{ fontSize: 32 }}>🏆</Text>
+          <Text style={{ fontFamily: F.displayBold, fontSize: 18, color: C.white, marginTop: 8 }}>No winners yet</Text>
+          <Text style={[s.body, { textAlign: 'center', marginTop: 4 }]}>Win an elimination match {p.phrase === 'all time' ? '' : p.phrase} to be first on this board.</Text>
+        </Card>
+      )}
+      {data && data.entries.length > 0 && (
+        <View style={{ gap: 6, marginTop: 8 }}>
+          {data.entries.map((e) => <RankRow key={e.id} e={e} scope={scope} />)}
+          {you && you.rank > 50 && (
+            <>
+              <Text style={{ textAlign: 'center', color: w(0.35), paddingVertical: 2 }}>⋯</Text>
+              <RankRow e={you} scope={scope} />
+            </>
+          )}
+          <Text style={{ textAlign: 'center', marginTop: 12, fontFamily: F.body, fontSize: 11, color: w(0.4) }}>
+            {data.rankedPlayers} {data.rankedPlayers === 1 ? 'player' : 'players'} ranked · pull down to refresh
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -372,12 +401,21 @@ export function Home({ s: g, account }: { s: GameState; account: Account }) {
   // Keep the tab when returning from a game; start on Play after each sign-in.
   const [tab, setTabState] = useState<Tab>(() => (rememberedFor === account.id ? rememberedTab : 'play'));
   const setTab = (t: Tab) => { rememberedTab = t; rememberedFor = account.id; setTabState(t); };
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await accounts.refresh().catch(() => {});
+    setRefreshKey((k) => k + 1);
+    setRefreshing(false);
+  }, []);
   return (
     <Screen padBottom={false}>
-      <ScrollView key={tab} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }}>
+      <ScrollView key={tab} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }}
+        refreshControl={tab === 'play' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
         <Animated.View entering={FadeIn.duration(200)}>
           {tab === 'play' && <PlayTab best={g.personalBest} />}
-          {tab === 'ranks' && <RanksTab account={account} />}
+          {tab === 'ranks' && <RanksTab account={account} refreshKey={refreshKey} />}
           {tab === 'profile' && <ProfileTab account={account} best={g.personalBest} />}
         </Animated.View>
       </ScrollView>
