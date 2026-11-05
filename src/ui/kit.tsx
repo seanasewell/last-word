@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import Animated, { Easing, SlideInDown, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { accounts, type AuthState } from '@/lib/account';
@@ -139,13 +139,28 @@ export function Avatar({ player, size = 36, dim = false, ring = false }: { playe
   );
 }
 
+/** Small "Bot" tag shown next to computer players' names. */
+export function BotBadge({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
+  const lg = size === 'lg';
+  return (
+    <View accessibilityLabel="Bot" style={{ paddingHorizontal: lg ? 8 : 6, paddingVertical: lg ? 3 : 1, borderRadius: lg ? 8 : 6, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
+      <Text style={{ fontFamily: F.bodyBold, fontSize: lg ? 12 : 10, color: w(0.75) }}>Bot</Text>
+    </View>
+  );
+}
+export const isBot = (p: { controller?: string }) => p.controller === 'bot';
+
 // ── Buttons & cards ────────────────────────────────────────────────────────
 export function Button({ title, onPress, variant = 'primary', style, disabled }: { title: string; onPress: () => void; variant?: 'primary' | 'ghost' | 'gold' | 'danger'; style?: StyleProp<ViewStyle>; disabled?: boolean }) {
   const text: TextStyle = { fontFamily: F.bodyBold, fontSize: 16, color: variant === 'gold' ? C.goldText : variant === 'ghost' ? w(0.9) : C.white };
   return (
-    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" style={({ pressed }) => [{ opacity: disabled ? 0.4 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }, style]}>
+    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" style={({ pressed }) => [{ opacity: disabled && variant !== 'primary' ? 0.5 : 1, transform: [{ scale: pressed && !disabled ? 0.97 : 1 }] }, style]}>
       {variant === 'ghost' || variant === 'danger' ? (
-        <View style={[s.btn, variant === 'ghost' ? { backgroundColor: w(0.06), borderWidth: 1, borderColor: w(0.1) } : { backgroundColor: C.coral }]}>
+        <View style={[s.btn, variant === 'ghost' ? { backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder } : { backgroundColor: C.coral }]}>
+          <Text style={text}>{title}</Text>
+        </View>
+      ) : variant === 'primary' && disabled ? (
+        <View style={[s.btn, { backgroundColor: C.primaryDisabled }]}>
           <Text style={text}>{title}</Text>
         </View>
       ) : (
@@ -183,9 +198,9 @@ export function FadeUp({ children, delay = 0, style }: { children: React.ReactNo
 export const s = StyleSheet.create({
   btn: { height: 50, borderRadius: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
   card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 20 },
-  eyebrow: { fontFamily: F.bodyBold, fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', color: w(0.5) },
+  eyebrow: { fontFamily: F.bodyBold, fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', color: w(0.65) },
   h1: { fontFamily: F.displayBold, fontSize: 30, color: C.white },
-  body: { fontFamily: F.body, fontSize: 15, color: w(0.7), lineHeight: 22 },
+  body: { fontFamily: F.body, fontSize: 15, color: w(0.8), lineHeight: 22 },
   tabular: { fontVariant: ['tabular-nums'] },
 });
 
@@ -193,14 +208,14 @@ export const s = StyleSheet.create({
 /** Bottom sheet over a dimmed backdrop. */
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title?: string; children: React.ReactNode }) {
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={open} transparent animationType="none" onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable accessibilityLabel="Close" onPress={onClose} style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.55)' }]} />
-        <View style={{ backgroundColor: C.ink850, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, borderColor: w(0.1), paddingHorizontal: 20, paddingTop: 10, paddingBottom: 36, maxHeight: '85%' }}>
+        <Animated.View entering={SlideInDown.duration(260).easing(Easing.out(Easing.cubic))} style={{ backgroundColor: C.ink850, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, borderColor: w(0.1), paddingHorizontal: 20, paddingTop: 10, paddingBottom: 36, maxHeight: '85%' }}>
           <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: w(0.2), marginBottom: 16 }} />
           {title && <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white, marginBottom: 12 }}>{title}</Text>}
           {children}
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -223,13 +238,18 @@ export function OptionSheet<T extends string>({ open, onClose, title, options, v
   );
 }
 
+/** Downward chevron for drop-down fields. */
+const Chevron = () => (
+  <View style={{ width: 9, height: 9, marginTop: -5, marginRight: 2, borderRightWidth: 2, borderBottomWidth: 2, borderColor: w(0.6), transform: [{ rotate: '45deg' }] }} />
+);
+
 /** A row that looks like a form field and opens a picker. */
-export function SelectRow({ label, value, placeholder, onPress }: { label?: string; value?: string; placeholder: string; onPress: () => void }) {
+export function SelectRow({ label, value, placeholder, onPress, active = false }: { label?: string; value?: string; placeholder: string; onPress: () => void; active?: boolean }) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label ?? placeholder}
-      style={{ height: 52, borderRadius: 16, borderWidth: 1, borderColor: w(0.1), backgroundColor: 'rgba(4,10,22,0.7)', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-      <Text style={{ fontFamily: F.bodySemi, fontSize: 16, color: value ? C.white : w(0.4) }}>{value || placeholder}</Text>
-      <Text style={{ color: w(0.45) }}>▾</Text>
+      style={{ height: 52, borderRadius: 16, borderWidth: 1.5, borderColor: active ? C.primary : C.cardBorder, backgroundColor: 'rgba(4,10,22,0.7)', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Text style={{ fontFamily: F.bodySemi, fontSize: 16, color: !value ? w(0.55) : active ? C.white : FIELD_IDLE_TEXT }}>{value || placeholder}</Text>
+      <Chevron />
     </Pressable>
   );
 }
@@ -239,6 +259,24 @@ export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boo
 }
 
 export const inputStyle: TextStyle = {
-  height: 56, borderRadius: 18, borderWidth: 1, borderColor: w(0.1), backgroundColor: 'rgba(4,10,22,0.7)',
+  height: 56, borderRadius: 18, borderWidth: 1.5, borderColor: C.cardBorder, backgroundColor: 'rgba(4,10,22,0.7)',
   paddingHorizontal: 16, color: C.white, fontFamily: F.bodySemi, fontSize: 18,
 };
+
+/** Field text when the field isn't selected (softer than the white used while typing). */
+const FIELD_IDLE_TEXT = w(0.75);
+
+/** Text input with the app's field styling: blue border and white text while selected. */
+export function TextField({ style, onFocus, onBlur, ...props }: TextInputProps) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      placeholderTextColor={w(0.45)}
+      keyboardAppearance="dark"
+      {...props}
+      onFocus={(e) => { setFocused(true); onFocus?.(e); }}
+      onBlur={(e) => { setFocused(false); onBlur?.(e); }}
+      style={[inputStyle, style, { borderColor: focused ? C.primary : C.cardBorder, color: focused ? C.white : FIELD_IDLE_TEXT }]}
+    />
+  );
+}

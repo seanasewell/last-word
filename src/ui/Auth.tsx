@@ -1,11 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { accounts } from '@/lib/account';
 import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { AnimatedTileLogo } from './AnimatedLogo';
 import { Captcha, type CaptchaHandle } from './Captcha';
-import { Avatar, Button, FadeUp, inputStyle, OptionSheet, s, Screen, SelectRow, Sheet, useAuth } from './kit';
+import { Avatar, Button, FadeUp, OptionSheet, s, Screen, SelectRow, Sheet, TextField, useAuth } from './kit';
 import { pickPhoto } from './photo';
 import { C, F, w } from './theme';
 
@@ -33,7 +33,7 @@ function DevRow({ title, sub, onPress, right, danger, armed }: { title: string; 
     <Pressable onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, backgroundColor: armed ? 'rgba(255,93,115,0.15)' : w(0.05), paddingHorizontal: 16, paddingVertical: 14 }}>
       <View style={{ flex: 1 }}>
         <Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: danger ? C.coral : C.white }}>{title}</Text>
-        <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.55), marginTop: 2 }}>{sub}</Text>
+        <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.7), marginTop: 2 }}>{sub}</Text>
       </View>
       {right}
     </Pressable>
@@ -60,10 +60,10 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
     <Sheet open={open} onClose={close} title="Developer controls">
       <View style={{ gap: 8 }}>
         {!signedIn && <DevRow title={busy ? 'Starting…' : captchaToken ? 'Skip onboarding' : 'Skip onboarding (checking…)'} sub="Creates a new player named Dev tester in California"
-          onPress={busy || !captchaToken ? undefined : () => run(async () => { const err = await accounts.devSkipSignup(captchaToken); onTokenUsed?.(); return err; })} right={<Text style={{ color: w(0.4) }}>→</Text>} />}
+          onPress={busy || !captchaToken ? undefined : () => run(async () => { const err = await accounts.devSkipSignup(captchaToken); onTokenUsed?.(); return err; })} right={<Text style={{ color: w(0.55) }}>→</Text>} />}
         {signedIn && (
           <>
-            <DevRow title="Restart onboarding" sub="Clears name, photo and region for this account" onPress={() => run(() => accounts.devRestartOnboarding())} right={<Text style={{ color: w(0.4) }}>→</Text>} />
+            <DevRow title="Restart onboarding" sub="Clears name, photo and region for this account" onPress={() => run(() => accounts.devRestartOnboarding())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
           </>
         )}
         <DevRow danger armed={confirmReset} title={confirmReset ? 'Tap again to sign out and clear' : 'Reset this phone'} sub="Starts over as a brand-new player. The current one can't be recovered"
@@ -111,14 +111,14 @@ export function AuthFlow() {
       <View style={{ flex: 1, paddingHorizontal: 24 }}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 40 }}>
           <AnimatedTileLogo size={38} />
-          <FadeUp delay={450}><Text style={[s.body, { textAlign: 'center', marginTop: 14, maxWidth: 260 }]}>The word game where only the last one standing wins.</Text></FadeUp>
+          <FadeUp delay={450}><Text style={[s.body, { textAlign: 'center', marginTop: 14, maxWidth: 300 }]}>{"The addicting word game where you find words within a word. It's really that easy."}</Text></FadeUp>
         </View>
         <View style={{ gap: 10, paddingBottom: 8 }}>
           <Captcha ref={captcha} onToken={onToken} onError={onCaptchaError} />
           {error && <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 14, color: C.coral }}>{error}</Text>}
           <Button title={starting || waiting ? 'Starting…' : 'Play'} disabled={starting || waiting} onPress={play} />
           <Pressable onPress={() => setDev(true)} hitSlop={10} style={{ alignSelf: 'center', paddingTop: 10 }}>
-            <Text style={{ fontFamily: F.bodySemi, fontSize: 12, color: w(0.45) }}>🛠 Developer controls</Text>
+            <Text style={{ fontFamily: F.bodySemi, fontSize: 12, color: w(0.6) }}>🛠 Developer controls</Text>
           </Pressable>
         </View>
       </View>
@@ -174,10 +174,10 @@ export function Onboarding() {
         {header}
         <Text style={[s.h1, { marginTop: 20 }]}>Pick a display name</Text>
         <Text style={[s.body, { marginTop: 8 }]}>This is how other players see you in matches and on the ranks.</Text>
-        <TextInput autoFocus value={name} onChangeText={(t) => setName(cleanName(t))} maxLength={NAME_MAX} placeholder="Display name" placeholderTextColor={w(0.3)}
+        <TextField autoFocus value={name} onChangeText={(t) => setName(cleanName(t))} maxLength={NAME_MAX} placeholder="Display name"
           autoCorrect={false} keyboardAppearance="dark" returnKeyType="next" accessibilityLabel="Display name"
-          onSubmitEditing={() => { if (!nErr) { accounts.update({ name: name.trim() }); setStep(1); } }} style={[inputStyle, { marginTop: 24 }]} />
-        <Text style={{ alignSelf: 'flex-end', marginTop: 6, fontFamily: F.body, fontSize: 12, color: w(0.45) }}>{name.length}/{NAME_MAX}</Text>
+          onSubmitEditing={() => { if (!nErr) { accounts.update({ name: name.trim() }); setStep(1); } }} style={{ marginTop: 24 }} />
+        <Text style={{ alignSelf: 'flex-end', marginTop: 6, fontFamily: F.body, fontSize: 12, color: w(0.6) }}>{name.length}/{NAME_MAX}</Text>
       </Step>
     );
   }
@@ -190,7 +190,7 @@ export function Onboarding() {
       </> : <>
         <Button title="Choose a photo" onPress={() => choose('library')} />
         <Button title="Take a photo" variant="ghost" onPress={() => choose('camera')} />
-        <Pressable onPress={() => setStep(2)} hitSlop={8} style={{ alignSelf: 'center', paddingTop: 4 }}><Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.6) }}>Skip for now</Text></Pressable>
+        <Pressable onPress={() => setStep(2)} hitSlop={8} style={{ alignSelf: 'center', paddingTop: 4 }}><Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.72) }}>Skip for now</Text></Pressable>
       </>}>
         {header}
         <Text style={[s.h1, { marginTop: 20 }]}>Add a photo</Text>
@@ -209,8 +209,8 @@ export function Onboarding() {
       <Text style={[s.h1, { marginTop: 20 }]}>Where do you play from?</Text>
       <Text style={[s.body, { marginTop: 8 }]}>Used for your national and {country.regionLabel.toLowerCase()} rankings.</Text>
       <View style={{ gap: 10, marginTop: 24 }}>
-        <SelectRow label="Country" value={`${country.flag}  ${country.name}`} placeholder="Country" onPress={() => setSheet('country')} />
-        <SelectRow label={country.regionLabel} value={account.region} placeholder={`Choose your ${country.regionLabel.toLowerCase()}`} onPress={() => setSheet('region')} />
+        <SelectRow label="Country" value={`${country.flag}  ${country.name}`} placeholder="Country" active={sheet === 'country'} onPress={() => setSheet('country')} />
+        <SelectRow label={country.regionLabel} value={account.region} placeholder={`Choose your ${country.regionLabel.toLowerCase()}`} active={sheet === 'region'} onPress={() => setSheet('region')} />
       </View>
       <OptionSheet open={sheet === 'country'} onClose={() => setSheet(null)} title="Country" value={account.country}
         options={COUNTRIES.map((x) => ({ value: x.code, label: `${x.flag}  ${x.name}` }))} onPick={(v) => accounts.update({ country: v, region: '' })} />

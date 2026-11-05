@@ -57,28 +57,42 @@ export interface Player {
   tiebreak: number;
 }
 
-export const BOT_ROSTER: { name: string; glyph: string; hue: number; bot: BotProfile }[] = [
-  {
-    name: 'Pip', glyph: 'P', hue: 168,
-    bot: { style: 'Speedy', interval: [2.6, 4.4], lengthBias: -1.4, know: [0.75, 0.4, 0.06], longPenalty: 0.16, warmup: [1, 2.5], stall: 0.06 },
-  },
-  {
-    name: 'Juno', glyph: 'J', hue: 280,
-    bot: { style: 'Balanced', interval: [3.8, 6.4], lengthBias: 0.5, know: [0.7, 0.42, 0.1], longPenalty: 0.09, warmup: [2, 4], stall: 0.1 },
-  },
-  {
-    name: 'Atlas', glyph: 'A', hue: 30,
-    bot: { style: 'Long-word hunter', interval: [8, 13], lengthBias: 3, know: [0.6, 0.45, 0.18], longPenalty: 0.02, warmup: [5, 8], stall: 0.12 },
-  },
-  {
-    name: 'Mika', glyph: 'M', hue: 340,
-    bot: { style: 'Streaky', interval: [2.4, 10], lengthBias: 0.2, know: [0.65, 0.35, 0.08], longPenalty: 0.1, warmup: [1.5, 5], stall: 0.22 },
-  },
-  {
-    name: 'Rook', glyph: 'R', hue: 205,
-    bot: { style: 'Methodical', interval: [5, 8], lengthBias: 1.1, know: [0.7, 0.5, 0.12], longPenalty: 0.06, warmup: [3, 6], stall: 0.08 },
-  },
+/** The five skill styles (same numbers as the server's game.bot_roster). */
+export const BOT_STYLES: BotProfile[] = [
+  { style: 'Speedy', interval: [2.6, 4.4], lengthBias: -1.4, know: [0.75, 0.4, 0.06], longPenalty: 0.16, warmup: [1, 2.5], stall: 0.06 },
+  { style: 'Balanced', interval: [3.8, 6.4], lengthBias: 0.5, know: [0.7, 0.42, 0.1], longPenalty: 0.09, warmup: [2, 4], stall: 0.1 },
+  { style: 'Long-word hunter', interval: [8, 13], lengthBias: 3, know: [0.6, 0.45, 0.18], longPenalty: 0.02, warmup: [5, 8], stall: 0.12 },
+  { style: 'Streaky', interval: [2.4, 10], lengthBias: 0.2, know: [0.65, 0.35, 0.08], longPenalty: 0.1, warmup: [1.5, 5], stall: 0.22 },
+  { style: 'Methodical', interval: [5, 8], lengthBias: 1.1, know: [0.7, 0.5, 0.12], longPenalty: 0.06, warmup: [3, 6], stall: 0.08 },
 ];
+
+/** Bot names, rotated at random (same list as the server's game.bot_names). */
+export const BOT_NAMES = [
+  'Pip', 'Juno', 'Atlas', 'Mika', 'Rook', 'Nova', 'Ziggy', 'Bramble', 'Echo', 'Fable',
+  'Indigo', 'Kit', 'Lumen', 'Maple', 'Nimbus', 'Orbit', 'Pixel', 'Quill', 'Rune', 'Sable',
+  'Tango', 'Umber', 'Vesper', 'Wren', 'Yuki', 'Zephyr', 'Basil', 'Clover', 'Dash', 'Ember',
+  'Fern', 'Gizmo', 'Halo', 'Iris', 'Jinx', 'Koda', 'Moss', 'Nico', 'Olive', 'Pepper',
+  'Quinn', 'Remy', 'Sage', 'Tully', 'Vale', 'Willow', 'Yara', 'Zuri', 'Biscuit', 'Cosmo',
+];
+
+function shuffle<T>(xs: T[]): T[] {
+  const a = xs.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/** `n` bots with random names and a spread of skill styles. */
+export function pickBots(n: number, avoidName = ''): Player[] {
+  const names = shuffle(BOT_NAMES.filter((x) => x.toLowerCase() !== avoidName.toLowerCase()));
+  const styles = shuffle(BOT_STYLES);
+  return Array.from({ length: n }, (_, i) => {
+    const name = names[i];
+    return makePlayer(`bot${i}`, name, name[0], Math.floor(Math.random() * 360), 'bot', styles[i % styles.length]);
+  });
+}
 
 export function makePlayer(
   id: string,

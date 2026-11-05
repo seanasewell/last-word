@@ -7,8 +7,14 @@ export const C = {
   ink850: '#0C1A34',
   ink800: '#11223F',
   ink700: '#1A3260',
-  card: 'rgba(26,52,104,0.55)',
-  cardBorder: 'rgba(255,255,255,0.07)',
+  /** Card and container surface: the primary blue, very faint. */
+  card: 'rgba(61,139,255,0.1)',
+  /** Light blue border used on every card and container. */
+  cardBorder: 'rgba(61,139,255,0.35)',
+  /** Dividers inside blue containers. */
+  divider: 'rgba(61,139,255,0.2)',
+  /** Disabled primary buttons: the primary blue at 50%. */
+  primaryDisabled: 'rgba(61,139,255,0.5)',
   primary: '#3D8BFF',
   primaryTop: '#5C9EFF',
   primaryBottom: '#2F6FEB',

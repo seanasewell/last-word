@@ -58,16 +58,17 @@ function MovingTile({ ch, target, size, index }: { ch: string; target: Target; s
   );
 }
 
-function Points({ text, left, top }: { text: string; left: number; top: number }) {
+function Points({ text, top }: { text: string; top: number }) {
   const v = useSharedValue(0);
   useEffect(() => {
     v.set(withDelay(850, withTiming(1, { duration: 1100, easing: Easing.out(Easing.quad) })));
   }, [v]);
   const st = useAnimatedStyle(() => ({
     opacity: interpolate(v.get(), [0, 0.15, 1], [0, 1, 0]),
-    transform: [{ translateY: interpolate(v.get(), [0, 1], [6, -46]) }, { scale: interpolate(v.get(), [0, 0.15, 1], [0.9, 1.08, 1]) }],
+    transform: [{ translateY: interpolate(v.get(), [0, 1], [6, -30]) }, { scale: interpolate(v.get(), [0, 0.15, 1], [0.9, 1.08, 1]) }],
   }));
-  return <Animated.Text style={[{ position: 'absolute', left, top, fontFamily: F.display, fontSize: 18, color: C.amber, zIndex: 3 }, st]}>{text}</Animated.Text>;
+  // Centred above the tiles.
+  return <Animated.Text style={[{ position: 'absolute', left: 0, right: 0, top, textAlign: 'center', fontFamily: F.display, fontSize: 18, color: C.amber, zIndex: 3 }, st]}>{text}</Animated.Text>;
 }
 
 export function AnimatedTileLogo({ size = 38 }: { size?: number }) {
@@ -109,7 +110,6 @@ export function AnimatedTileLogo({ size = 38 }: { size?: number }) {
     for (const ch of g) { pos[ch] = { x, y: 0, s: 1, o: 1 }; x += size + gap; }
     x += wordGap - gap;
   });
-  const wordEnd = x - wordGap + gap;
   const isLogo = groups.length === 2;
   const spare = TILES.filter((c) => !used.has(c));
   const rs = size * rackScale;
@@ -119,7 +119,7 @@ export function AnimatedTileLogo({ size = 38 }: { size?: number }) {
   return (
     <View accessibilityRole="image" accessibilityLabel="Last word" style={{ width, height, alignSelf: 'center' }}>
       {TILES.map((ch, i) => <MovingTile key={ch} ch={ch} target={pos[ch]} size={size} index={i} />)}
-      {!isLogo && <Points key={step} text={`+${scoreWord(groups[0].toLowerCase())}`} left={wordEnd + 8} top={tileH / 2 - 14} />}
+      {!isLogo && <Points key={step} text={`+${scoreWord(groups[0].toLowerCase())}`} top={-28} />}
     </View>
   );
 }

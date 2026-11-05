@@ -21,7 +21,7 @@ import {
   type Counts, type Validation,
 } from './words';
 import {
-  BOT_ROSTER, makePlayer, rankByRound, resetForRound, type Player, type WordEntry,
+  makePlayer, pickBots, rankByRound, resetForRound, type Player, type WordEntry,
 } from './players';
 import { planBotRound, type PlannedSubmission } from './bots';
 
@@ -237,12 +237,7 @@ export class GameEngine {
     this.clearTimers();
     this.matchCounted = false;
     const human = this.makeHuman();
-    const bots = BOT_ROSTER.map((b, i) => makePlayer(`bot${i}`, b.name, b.glyph, b.hue, 'bot', b.bot));
-    // Bots join in a shuffled order.
-    for (let i = bots.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [bots[i], bots[j]] = [bots[j], bots[i]];
-    }
+    const bots = pickBots(5, human.name);
     this.set({
       mode: 'multi', matchId: newId(), phase: 'lobby', round: 0, source: '', usedSources: [],
       players: [human, ...bots], lobbyFilled: 1, winnerId: null, lastElimination: null,

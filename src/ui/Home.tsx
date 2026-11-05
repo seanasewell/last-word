@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,7 +9,7 @@ import { fetchLeaderboard, type Leaderboard, type RankEntry, type Scope } from '
 import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { scoreWord } from '@/lib/words';
 import { cleanName, DevControls, NAME_MAX, nameError } from './Auth';
-import { Avatar, Button, Card, FadeUp, inputStyle, OptionSheet, ordinal, s, Screen, Sheet, TileLogo, Toggle, useNow } from './kit';
+import { Avatar, Button, Card, FadeUp, OptionSheet, ordinal, s, Screen, Sheet, TextField, TileLogo, Toggle, useNow } from './kit';
 import { pickPhoto } from './photo';
 import { onSoundChange, setSoundEnabled, soundEnabled } from './sound';
 import { C, F, w } from './theme';
@@ -37,7 +37,7 @@ function TabBar({ tab, onChange, account }: { tab: Tab; onChange: (t: Tab) => vo
             <View style={{ height: 26, justifyContent: 'center', opacity: active ? 1 : 0.6 }}>
               {t.emoji ? <Text style={{ fontSize: 23 }}>{t.emoji}</Text> : <Avatar player={meAvatar(account)} size={26} />}
             </View>
-            <Text style={{ fontFamily: F.bodySemi, fontSize: 11, color: active ? C.white : w(0.6) }}>{t.label}</Text>
+            <Text style={{ fontFamily: F.bodySemi, fontSize: 11, color: active ? C.white : w(0.72) }}>{t.label}</Text>
           </Pressable>
         );
       })}
@@ -45,13 +45,21 @@ function TabBar({ tab, onChange, account }: { tab: Tab; onChange: (t: Tab) => vo
   );
 }
 
+/** Player headshots shown on the Elimination match card. */
+const MATCH_FACES = [
+  require('@/assets/avatars/bot1.jpg'),
+  require('@/assets/avatars/bot2.jpg'),
+  require('@/assets/avatars/bot3.jpg'),
+  require('@/assets/avatars/bot4.jpg'),
+  require('@/assets/avatars/bot5.jpg'),
+];
+
 function PlayTab({ best }: { best: number }) {
   const [showScoring, setShowScoring] = useState(false);
   return (
     <View>
-      <View style={{ alignItems: 'center', paddingTop: 8 }}>
+      <View style={{ alignItems: 'center', paddingTop: 56 }}>
         <TileLogo size={36} />
-        <FadeUp delay={400}><Text style={{ marginTop: 12, fontFamily: F.bodySemi, fontSize: 12, letterSpacing: 0.4, color: w(0.5) }}>towards · world · salt</Text></FadeUp>
         <FadeUp delay={480}><Text style={[s.body, { marginTop: 14, textAlign: 'center', maxWidth: 320 }]}>Rearrange the letters of one big word into as many small words as you can. Longer words score more points.</Text></FadeUp>
       </View>
 
@@ -61,10 +69,10 @@ function PlayTab({ best }: { best: number }) {
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: F.displayBold, fontSize: 24, color: C.white }}>Elimination match</Text>
               <View style={{ flexDirection: 'row' }}>
-                {[168, 280, 30, 340, 205].map((h, i) => <View key={h} style={{ width: 22, height: 22, borderRadius: 11, marginLeft: i ? -7 : 0, borderWidth: 2, borderColor: C.bg, backgroundColor: `hsl(${h}, 80%, 58%)` }} />)}
+                {MATCH_FACES.map((src, i) => <Image key={i} source={src} style={{ width: 26, height: 26, borderRadius: 13, marginLeft: i ? -8 : 0, borderWidth: 2, borderColor: C.bg }} />)}
               </View>
             </View>
-            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.65), marginTop: 4 }}>6 players · 5 rounds · 60 seconds each. Lowest score each round is out.</Text>
+            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>6 players · 5 rounds · 60 seconds each. Lowest score each round is out.</Text>
             <View style={{ alignSelf: 'flex-start', marginTop: 16, backgroundColor: C.primary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 9 }}>
               <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>Find a match →</Text>
             </View>
@@ -74,7 +82,7 @@ function PlayTab({ best }: { best: number }) {
         <Pressable onPress={() => engine.startSingle()} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
           <Card style={{ borderRadius: 24, padding: 20 }}>
             <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white }}>Solo challenge</Text>
-            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.65), marginTop: 4 }}>One word, 60 seconds. Beat your personal best.</Text>
+            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>One word, 60 seconds. Beat your personal best.</Text>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 12 }}>
               <Text style={s.eyebrow}>Best</Text>
               <Text style={[{ fontFamily: F.display, fontSize: 18, color: C.amber }, s.tabular]}>{best}</Text>
@@ -82,20 +90,23 @@ function PlayTab({ best }: { best: number }) {
           </Card>
         </Pressable>
 
-        <Pressable onPress={() => setShowScoring((x) => !x)} hitSlop={8}>
-          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.55), paddingTop: 4 }}>{showScoring ? '▾' : '▸'} How scoring works</Text>
+        <Pressable onPress={() => setShowScoring((x) => !x)} hitSlop={8} accessibilityRole="button" accessibilityState={{ expanded: showScoring }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 4 }}>
+          <Text style={{ fontSize: 16 }}>🤔</Text>
+          <Text style={{ fontFamily: F.bodySemi, fontSize: 16, color: w(0.7) }}>How scoring works</Text>
+          <Text style={{ fontFamily: F.bodySemi, fontSize: 16, color: w(0.7) }}>{showScoring ? '▾' : '▸'}</Text>
         </Pressable>
         {showScoring && (
           <View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((n) => (
-                <View key={n} style={{ width: '18.4%', alignItems: 'center', paddingVertical: 6, borderRadius: 12, backgroundColor: w(0.04) }}>
-                  <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.5) }}>{n}{n === 11 ? '+' : ''} letters</Text>
+                <View key={n} style={{ width: '18.4%', alignItems: 'center', paddingVertical: 6, borderRadius: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
+                  <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.65) }}>{n}{n === 11 ? '+' : ''} letters</Text>
                   <Text style={{ fontFamily: F.displayBold, fontSize: 15, color: C.white }}>{scoreWord('x'.repeat(n))}</Text>
                 </View>
               ))}
             </View>
-            <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.5), marginTop: 8, lineHeight: 17 }}>{"Each letter can be used as often as it appears in the source. The source word itself doesn't count. No proper nouns, abbreviations or hyphenated words."}</Text>
+            <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65), marginTop: 8, lineHeight: 17 }}>{"Each letter can be used as often as it appears in the source. The source word itself doesn't count. No proper nouns, abbreviations or hyphenated words."}</Text>
           </View>
         )}
       </FadeUp>
@@ -143,13 +154,13 @@ function resetText(period: Period, now: number): string | null {
 
 function Segmented<T extends string>({ options, value, onChange, small = false }: { options: { id: T; label: string }[]; value: T; onChange: (v: T) => void; small?: boolean }) {
   return (
-    <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 4, padding: 4, borderRadius: 16, backgroundColor: w(0.05) }}>
+    <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 4, padding: 4, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
       {options.map((x) => {
         const on = value === x.id;
         return (
           <Pressable key={x.id} onPress={() => onChange(x.id)} accessibilityRole="tab" accessibilityState={{ selected: on }}
-            style={{ flex: 1, height: small ? 32 : 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.ink700 : 'transparent' }}>
-            <Text numberOfLines={1} style={{ fontFamily: F.bodySemi, fontSize: small ? 12 : 13, color: on ? C.white : w(0.6) }}>{x.label}</Text>
+            style={{ flex: 1, height: small ? 32 : 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.primary : 'transparent' }}>
+            <Text numberOfLines={1} style={{ fontFamily: F.bodySemi, fontSize: small ? 12 : 13, color: on ? C.white : w(0.72) }}>{x.label}</Text>
           </Pressable>
         );
       })}
@@ -164,16 +175,16 @@ function RankRow({ e, scope }: { e: RankEntry; scope: Scope }) {
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16,
       backgroundColor: e.isYou ? 'rgba(61,139,255,0.15)' : e.rank <= 3 ? 'rgba(255,181,71,0.06)' : w(0.03), borderWidth: e.isYou ? 1 : 0, borderColor: 'rgba(61,139,255,0.4)' }}>
       <View style={{ width: 30, alignItems: 'center' }}>
-        {medal ? <Text style={{ fontSize: 20 }}>{medal}</Text> : <Text style={[{ fontFamily: F.displayBold, fontSize: 14, color: w(0.55) }, s.tabular]}>{e.rank}</Text>}
+        {medal ? <Text style={{ fontSize: 20 }}>{medal}</Text> : <Text style={[{ fontFamily: F.displayBold, fontSize: 14, color: w(0.7) }, s.tabular]}>{e.rank}</Text>}
       </View>
       <Avatar player={{ glyph: e.glyph, hue: e.hue, photo: e.photo, isYou: e.isYou }} size={34} />
       <View style={{ flex: 1 }}>
         <Text numberOfLines={1} style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>{e.name}</Text>
-        <Text numberOfLines={1} style={{ fontFamily: F.body, fontSize: 11, color: w(0.5) }}>{where}</Text>
+        <Text numberOfLines={1} style={{ fontFamily: F.body, fontSize: 11, color: w(0.65) }}>{where}</Text>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={[{ fontFamily: F.display, fontSize: 18, color: C.white }, s.tabular]}>{e.wins}</Text>
-        <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.45) }}>{e.wins === 1 ? 'win' : 'wins'}</Text>
+        <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.6) }}>{e.wins === 1 ? 'win' : 'wins'}</Text>
       </View>
     </View>
   );
@@ -213,23 +224,20 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
   return (
     <View>
       <Text style={s.h1}>Ranks</Text>
-      <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.6), marginTop: 4 }}>Most elimination-match wins · {periodRange(period, new Date(now))}</Text>
+      <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.72), marginTop: 4 }}>Most elimination-match wins · {periodRange(period, new Date(now))}</Text>
       <View style={{ gap: 8, marginTop: 16 }}>
         <Segmented options={scopes} value={scope} onChange={setScope} />
         <Segmented options={PERIODS} value={period} onChange={setPeriod} small />
       </View>
-      <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(61,139,255,0.35)', backgroundColor: 'rgba(61,139,255,0.1)', padding: 16 }}>
+      <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, padding: 16 }}>
         <Avatar player={meAvatar(account)} size={44} />
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.6) }}>Your rank {scopeName}</Text>
+          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.72) }}>Your rank {scopeName}</Text>
           <Text style={{ fontFamily: F.display, fontSize: 24, color: C.white }}>{you ? ordinal(you.rank) : data ? 'Not ranked yet' : '…'}</Text>
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={[{ fontFamily: F.display, fontSize: 24, color: C.mint }, s.tabular]}>{myWins}</Text>
-          <Text style={{ fontFamily: F.body, fontSize: 11, color: w(0.55) }}>{myWins === 1 ? 'win' : 'wins'} {p.phrase}</Text>
-        </View>
+        <Text accessibilityLabel={`${myWins} ${myWins === 1 ? 'win' : 'wins'} ${p.phrase}`} style={[{ fontFamily: F.display, fontSize: 34, color: C.mint }, s.tabular]}>{myWins}</Text>
       </View>
-      {reset && <Text style={{ alignSelf: 'flex-end', marginTop: 8, fontFamily: F.body, fontSize: 11, color: w(0.45) }}>{reset}</Text>}
+      {reset && <Text style={{ alignSelf: 'flex-end', marginTop: 8, fontFamily: F.body, fontSize: 11, color: w(0.6) }}>{reset}</Text>}
 
       {error && !data && <Text style={{ marginTop: 24, textAlign: 'center', fontFamily: F.body, fontSize: 14, color: C.coral }}>{error}</Text>}
       {!error && !data && <ActivityIndicator color={C.primary} style={{ marginTop: 32 }} />}
@@ -245,11 +253,11 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
           {data.entries.map((e) => <RankRow key={e.id} e={e} scope={scope} />)}
           {you && you.rank > 50 && (
             <>
-              <Text style={{ textAlign: 'center', color: w(0.35), paddingVertical: 2 }}>⋯</Text>
+              <Text style={{ textAlign: 'center', color: w(0.5), paddingVertical: 2 }}>⋯</Text>
               <RankRow e={you} scope={scope} />
             </>
           )}
-          <Text style={{ textAlign: 'center', marginTop: 12, fontFamily: F.body, fontSize: 11, color: w(0.4) }}>
+          <Text style={{ textAlign: 'center', marginTop: 12, fontFamily: F.body, fontSize: 11, color: w(0.55) }}>
             {data.rankedPlayers} {data.rankedPlayers === 1 ? 'player' : 'players'} ranked · pull down to refresh
           </Text>
         </View>
@@ -295,7 +303,7 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
     else setSheet(null);
   };
   const wins = (p: Period) => winsFor(account, p);
-  const row = { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: w(0.06) };
+  const row = { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.divider };
 
   return (
     <View>
@@ -320,14 +328,14 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
       </View>
 
       <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Account</Text>
-      <View style={{ borderRadius: 18, backgroundColor: w(0.04), overflow: 'hidden' }}>
-        <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: w(0.06) }}>
-          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.55) }}>Display name</Text>
+      <View style={{ borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' }}>
+        <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.divider }}>
+          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.7) }}>Display name</Text>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-            <TextInput value={name} onChangeText={(t) => setName(cleanName(t))} maxLength={NAME_MAX} autoCorrect={false} keyboardAppearance="dark"
-              returnKeyType="done" onSubmitEditing={save} accessibilityLabel="Display name" style={[inputStyle, { flex: 1, height: 44, borderRadius: 12, fontSize: 16 }]} />
-            <Pressable onPress={save} disabled={!dirty || !!err} style={{ height: 44, paddingHorizontal: 16, borderRadius: 12, justifyContent: 'center', backgroundColor: dirty && !err ? C.primary : w(0.1) }}>
-              <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: dirty && !err ? C.white : w(0.4) }}>{saved ? 'Saved ✓' : 'Save'}</Text>
+            <TextField value={name} onChangeText={(t) => setName(cleanName(t))} maxLength={NAME_MAX} autoCorrect={false}
+              returnKeyType="done" onSubmitEditing={save} accessibilityLabel="Display name" style={{ flex: 1, height: 44, borderRadius: 12, fontSize: 16 }} />
+            <Pressable onPress={save} disabled={!dirty || !!err} style={{ height: 44, paddingHorizontal: 16, borderRadius: 12, justifyContent: 'center', backgroundColor: dirty && !err ? C.primary : C.primaryDisabled }}>
+              <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: (dirty && !err) || saved ? C.white : w(0.5) }}>{saved ? 'Saved ✓' : 'Save'}</Text>
             </Pressable>
           </View>
           {dirty && err && <Text style={{ marginTop: 4, fontFamily: F.body, fontSize: 12, color: C.coral }}>{err}</Text>}
@@ -343,15 +351,15 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
       </View>
 
       <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Settings</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 18, backgroundColor: w(0.04), paddingHorizontal: 16, paddingVertical: 10 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 16, paddingVertical: 10 }}>
         <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🔊 Sound effects</Text>
         <Toggle on={sound} onChange={setSoundEnabled} label="Sound effects" />
       </View>
 
       <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Developer</Text>
-      <Pressable onPress={() => setSheet('dev')} style={{ flexDirection: 'row', justifyContent: 'space-between', borderRadius: 18, backgroundColor: w(0.04), paddingHorizontal: 16, paddingVertical: 14 }}>
+      <Pressable onPress={() => setSheet('dev')} style={{ flexDirection: 'row', justifyContent: 'space-between', borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 16, paddingVertical: 14 }}>
         <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🛠 Developer controls</Text>
-        <Text style={{ color: w(0.4) }}>›</Text>
+        <Text style={{ color: w(0.55) }}>›</Text>
       </Pressable>
 
       <View style={{ gap: 10, marginTop: 26 }}>

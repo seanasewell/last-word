@@ -9,7 +9,7 @@ import { engine, HUMAN_ID, TOTAL_ROUNDS, type GameState } from '@/lib/engine';
 import { rankByRound, type Player, type WordEntry } from '@/lib/players';
 import { REJECTION_TEXT } from '@/lib/words';
 import { sfx } from './sound';
-import { Avatar, Card, ordinal, s, Screen, Tile, useAnimatedNumber, useNow } from './kit';
+import { Avatar, Card, ordinal, s, Screen, Tile, useAnimatedNumber, useNow, BotBadge, isBot } from './kit';
 import { C, F, w } from './theme';
 
 const haptic = {
@@ -163,7 +163,7 @@ function WordInput({ final }: { final: boolean }) {
     shake.set(withSequence(...[-6, 6, -5, 4, 0].map((x) => withTiming(x, { duration: 60 }))));
   };
 
-  const border = ghost && !value ? 'rgba(255,93,115,0.7)' : focused ? (final ? 'rgba(255,181,71,0.7)' : 'rgba(61,139,255,0.7)') : w(0.1);
+  const border = ghost && !value ? 'rgba(255,93,115,0.7)' : focused ? (final ? 'rgba(255,181,71,0.7)' : C.primary) : C.cardBorder;
   return (
     <View style={{ paddingHorizontal: 16 }}>
       <Animated.View style={shakeStyle}>
@@ -181,7 +181,7 @@ function WordInput({ final }: { final: boolean }) {
           textContentType="none"
           keyboardAppearance="dark"
           placeholder={ghost ? '' : 'Type a word'}
-          placeholderTextColor={w(0.3)}
+          placeholderTextColor={w(0.45)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           accessibilityLabel="Word entry"
@@ -237,10 +237,11 @@ function LeaderRow({ p, rank, last, showDanger }: { p: Player; rank: number; las
       backgroundColor: isYou ? 'rgba(61,139,255,0.15)' : danger ? 'rgba(255,93,115,0.08)' : w(0.03),
       borderColor: isYou ? 'rgba(61,139,255,0.45)' : danger ? 'rgba(255,93,115,0.3)' : 'transparent',
     }]}>
-      <Text style={[{ width: 16, textAlign: 'center', fontFamily: F.displayBold, fontSize: 14, color: danger ? C.coral : w(0.5) }, s.tabular]}>{rank + 1}</Text>
+      <Text style={[{ width: 16, textAlign: 'center', fontFamily: F.displayBold, fontSize: 14, color: danger ? C.coral : w(0.65) }, s.tabular]}>{rank + 1}</Text>
       <Avatar player={p} size={34} />
       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: F.bodyBold, fontSize: 15, color: w(0.92) }}>{p.name}</Text>
+        {isBot(p) && <BotBadge />}
         {danger && <Text style={{ fontFamily: F.bodyBold, fontSize: 10, color: C.coral, backgroundColor: 'rgba(255,93,115,0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden' }}>Elimination zone</Text>}
       </View>
       {gain && <Text style={{ fontFamily: F.bodyBold, fontSize: 12, color: C.mint }}>+{gain.n}</Text>}
@@ -269,7 +270,10 @@ function VersusSide({ p, leading }: { p: Player; leading: boolean }) {
   return (
     <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
       <Avatar player={p} size={52} ring={leading} />
-      <Text numberOfLines={1} style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.92) }}>{p.name}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
+        <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: F.bodySemi, fontSize: 14, color: w(0.92) }}>{p.name}</Text>
+        {isBot(p) && <BotBadge />}
+      </View>
       <Text style={[{ fontFamily: F.display, fontSize: 36, color: leading ? C.amber : C.white }, s.tabular]}>{score}</Text>
     </View>
   );
@@ -312,7 +316,7 @@ function WordList({ words }: { words: WordEntry[] }) {
       </View>
       {words.length === 0 ? (
         <View style={{ borderRadius: 18, borderWidth: 1, borderStyle: 'dashed', borderColor: w(0.12), padding: 18 }}>
-          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.45), textAlign: 'center' }}>Words you find appear here. Longer words score far more.</Text>
+          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.6), textAlign: 'center' }}>Words you find appear here. Longer words score far more.</Text>
         </View>
       ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
@@ -352,7 +356,7 @@ export function GameScreen({ s: g }: { s: GameState }) {
         </View>
 
         {spectating ? (
-          <View style={{ marginHorizontal: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 18, borderWidth: 1, borderColor: w(0.1), backgroundColor: w(0.04), paddingHorizontal: 16, paddingVertical: 12 }}>
+          <View style={{ marginHorizontal: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 18, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, paddingHorizontal: 16, paddingVertical: 12 }}>
             <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>You placed <Text style={{ fontFamily: F.bodyBold, color: C.white }}>{ordinal(me.placement || 0)}</Text> · watching the rest</Text>
             <Pressable onPress={() => engine.goMenu()} hitSlop={10}><Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.primary }}>Leave</Text></Pressable>
           </View>
@@ -363,7 +367,7 @@ export function GameScreen({ s: g }: { s: GameState }) {
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: insets.bottom + 24, gap: 14 }}>
           {!single && (final ? <Versus players={active} /> : <Leaderboard players={active} started={started} />)}
           {!spectating && <WordList words={me.roundWords} />}
-          {single && <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 11, color: w(0.4) }}>{g.possibleWords} words are hiding in this one.</Text>}
+          {single && <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 11, color: w(0.55) }}>{g.possibleWords} words are hiding in this one.</Text>}
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

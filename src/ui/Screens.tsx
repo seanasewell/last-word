@@ -5,7 +5,7 @@ import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDe
 
 import { engine, HUMAN_ID, TOTAL_ROUNDS, type GameState } from '@/lib/engine';
 import type { Player } from '@/lib/players';
-import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Stat, Tile, useAnimatedNumber, useNow } from './kit';
+import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Stat, Tile, useAnimatedNumber, useNow, BotBadge, isBot } from './kit';
 import { sfx } from './sound';
 import { C, F, w } from './theme';
 
@@ -23,10 +23,13 @@ const Row = ({ p, right, sub, highlight, out, rank }: { p: Player; right: React.
     backgroundColor: out ? 'rgba(255,93,115,0.08)' : highlight === 'gold' ? 'rgba(255,181,71,0.12)' : highlight === 'you' ? 'rgba(61,139,255,0.14)' : w(0.03),
     borderWidth: highlight === 'gold' ? 1 : 0, borderColor: 'rgba(255,181,71,0.3)',
   }}>
-    {rank != null && <Text style={{ width: 30, fontFamily: F.displayBold, fontSize: 14, color: out ? C.coral : rank === '1st' ? C.amber : w(0.5) }}>{rank}</Text>}
+    {rank != null && <Text style={{ width: 30, fontFamily: F.displayBold, fontSize: 14, color: out ? C.coral : rank === '1st' ? C.amber : w(0.65) }}>{rank}</Text>}
     <Avatar player={p} size={30} dim={out} />
-    <Text numberOfLines={1} style={{ flex: 1, fontFamily: F.bodyBold, fontSize: 15, color: out ? w(0.45) : w(0.92), textDecorationLine: out ? 'line-through' : 'none' }}>{p.name}</Text>
-    {sub && <Text style={{ fontFamily: F.body, fontSize: 11, color: w(0.45) }}>{sub}</Text>}
+    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: F.bodyBold, fontSize: 15, color: out ? w(0.6) : w(0.92), textDecorationLine: out ? 'line-through' : 'none' }}>{p.name}</Text>
+      {isBot(p) && <BotBadge />}
+    </View>
+    {sub && <Text style={{ fontFamily: F.body, fontSize: 11, color: w(0.6) }}>{sub}</Text>}
     {right}
   </View>
 );
@@ -62,13 +65,13 @@ export function Lobby({ s: g }: { s: GameState }) {
           <View style={{ flexDirection: 'row', gap: 6 }}>
             {['LAST', 'WORD'].map((wd) => <View key={wd} style={{ flexDirection: 'row', gap: 2 }}>{wd.split('').map((c, i) => <Tile key={i} ch={c} size={18} animate={false} />)}</View>)}
           </View>
-          <Pressable onPress={() => engine.goMenu()} hitSlop={10}><Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: w(0.6) }}>Leave</Text></Pressable>
+          <Pressable onPress={() => engine.goMenu()} hitSlop={10}><Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: w(0.72) }}>Leave</Text></Pressable>
         </View>
         <Text style={[s.eyebrow, { marginTop: 28 }]}>Match {g.matchId}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 4 }}>
           <Text style={s.h1}>{full ? 'Match found' : 'Finding players'}</Text>
           <Text style={[{ fontFamily: F.display, fontSize: 20 }, s.tabular]}>
-            <Text style={{ color: full ? C.mint : C.primary }}>{filled}</Text><Text style={{ color: w(0.35) }}>/6 players</Text>
+            <Text style={{ color: full ? C.mint : C.primary }}>{filled}</Text><Text style={{ color: w(0.5) }}>/6 players</Text>
           </Text>
         </View>
         <View style={{ height: 6, borderRadius: 3, backgroundColor: w(0.06), marginTop: 12, overflow: 'hidden' }}>
@@ -78,12 +81,15 @@ export function Lobby({ s: g }: { s: GameState }) {
           {g.players.map((p, i) => {
             const joined = i < filled;
             return (
-              <Card key={p.id} style={{ width: '48%', flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderColor: p.id === HUMAN_ID ? 'rgba(61,139,255,0.5)' : C.cardBorder }}>
+              <Card key={p.id} style={{ width: '48%', flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderColor: p.id === HUMAN_ID ? C.primary : C.cardBorder }}>
                 {joined ? (
                   <Animated.View entering={ZoomIn.duration(280)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                     <Avatar player={p} size={40} />
                     <View style={{ flex: 1 }}>
-                      <Text numberOfLines={1} style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>{p.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>{p.name}</Text>
+                        {isBot(p) && <BotBadge />}
+                      </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
                         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.mint }} />
                         <Text style={{ fontFamily: F.bodySemi, fontSize: 12, color: C.mint }}>Ready</Text>
@@ -93,7 +99,7 @@ export function Lobby({ s: g }: { s: GameState }) {
                 ) : (
                   <>
                     <View style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderStyle: 'dashed', borderColor: w(0.15) }} />
-                    <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.45) }}>Waiting…</Text>
+                    <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.6) }}>Waiting…</Text>
                   </>
                 )}
               </Card>
@@ -102,9 +108,9 @@ export function Lobby({ s: g }: { s: GameState }) {
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 22 }}>
           {[['5', 'rounds'], ['60s', 'per round'], ['1', 'out each round']].map(([a, b]) => (
-            <View key={b} style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 16, backgroundColor: w(0.03) }}>
+            <View key={b} style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
               <Text style={{ fontFamily: F.display, fontSize: 20, color: C.white }}>{a}</Text>
-              <Text style={{ fontFamily: F.body, fontSize: 11, color: w(0.55) }}>{b}</Text>
+              <Text style={{ fontFamily: F.body, fontSize: 11, color: w(0.7) }}>{b}</Text>
             </View>
           ))}
         </View>
@@ -113,7 +119,7 @@ export function Lobby({ s: g }: { s: GameState }) {
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,10,22,0.88)', alignItems: 'center', justifyContent: 'center' }]}>
           <Text style={[s.eyebrow, { fontSize: 13, letterSpacing: 2.4 }]}>Round 1 starts in</Text>
           <Animated.Text style={[{ fontFamily: F.display, fontSize: 120, color: C.white }, popStyle]}>{count}</Animated.Text>
-          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.55) }}>Get your fingers ready</Text>
+          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.7) }}>Get your fingers ready</Text>
         </View>
       )}
     </Screen>
@@ -151,7 +157,7 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
           <Text style={[s.h1, { fontSize: 34, textAlign: 'center', marginTop: 18 }]}>{"You've been eliminated"}</Text>
           <Text style={{ marginTop: 10 }}>
             <Text style={{ fontFamily: F.display, fontSize: 36, color: C.coral }}>{ordinal(me.placement!)}</Text>
-            <Text style={{ fontFamily: F.bodySemi, fontSize: 18, color: w(0.55) }}>  of 6</Text>
+            <Text style={{ fontFamily: F.bodySemi, fontSize: 18, color: w(0.7) }}>  of 6</Text>
           </Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 22 }}>
@@ -163,7 +169,7 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
         </View>
         <Text style={[s.eyebrow, { marginTop: 22, marginBottom: 8 }]}>Still in · {remaining.length} players</Text>
         <View style={{ gap: 6 }}>
-          {remaining.map((p) => <Row key={p.id} p={p} right={<Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.5) }}>{p.totalScore} total</Text>} />)}
+          {remaining.map((p) => <Row key={p.id} p={p} right={<Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65) }}>{p.totalScore} total</Text>} />)}
         </View>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 'auto', paddingTop: 24 }}>
           <Button title="Main menu" variant="ghost" style={{ flex: 1 }} onPress={() => engine.goMenu()} />
@@ -179,12 +185,15 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
       <View style={{ alignItems: 'center', marginTop: 18 }}>
         <Avatar player={out} size={72} dim />
         <Text style={{ marginTop: 14, fontFamily: F.bodyBold, fontSize: 13, letterSpacing: 2.6, textTransform: 'uppercase', color: C.coral }}>Eliminated</Text>
-        <Text style={[s.h1, { marginTop: 2 }]}>{out.name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
+          <Text style={s.h1}>{out.name}</Text>
+          {isBot(out) && <BotBadge size="lg" />}
+        </View>
       </View>
-      <View style={{ marginTop: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 18, borderWidth: 1, borderColor: w(0.1), backgroundColor: w(0.04), paddingHorizontal: 16, paddingVertical: 12 }}>
+      <View style={{ marginTop: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 18, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, paddingHorizontal: 16, paddingVertical: 12 }}>
         <Text style={{ fontFamily: F.displayBold, fontSize: 18, color: C.white }}>{nextRound === TOTAL_ROUNDS ? 'Championship round' : `Round ${nextRound}`}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.55) }}>starts in</Text>
+          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.7) }}>starts in</Text>
           <View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: 'rgba(61,139,255,0.55)', alignItems: 'center', justifyContent: 'center' }}>
             <Text style={[{ fontFamily: F.display, fontSize: 20, color: C.white }, s.tabular]}>{secs}</Text>
           </View>
@@ -196,7 +205,7 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
           return <Row key={row.id} p={p} rank={String(i + 1)} out={row.id === e.playerId} highlight={p.id === HUMAN_ID ? 'you' : undefined} right={num(row.roundScore)} />;
         })}
       </View>
-      <Text style={{ marginTop: 'auto', paddingTop: 24, textAlign: 'center', fontFamily: F.body, fontSize: 12, color: w(0.45) }}>A new word is revealed when the round begins</Text>
+      <Text style={{ marginTop: 'auto', paddingTop: 24, textAlign: 'center', fontFamily: F.body, fontSize: 12, color: w(0.6) }}>A new word is revealed when the round begins</Text>
     </PageScroll>
   );
 }
@@ -260,7 +269,8 @@ export function FinalResults({ s: g }: { s: GameState }) {
         <FadeUp style={{ alignItems: 'center', paddingTop: 20 }}>
           <Text style={{ fontSize: 32, marginBottom: -6, zIndex: 2 }}>👑</Text>
           <Avatar player={winner} size={104} ring />
-          <Text style={[s.h1, { fontSize: 34, textAlign: 'center', marginTop: 18 }]}>{youWon ? 'You are the last word' : `${winner.name} wins the match`}</Text>
+          <Text style={[s.h1, { fontSize: 34, textAlign: 'center', marginTop: 18 }]}>{youWon ? 'You have the last word 🎉' : `${winner.name} wins the match`}</Text>
+          {!youWon && isBot(winner) && <View style={{ marginTop: 8 }}><BotBadge size="lg" /></View>}
           {youWon && <Text style={[s.body, { marginTop: 4 }]}>Five rounds, five survivals. Champion.</Text>}
         </FadeUp>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 22 }}>
@@ -275,7 +285,7 @@ export function FinalResults({ s: g }: { s: GameState }) {
             <Avatar player={me} size={36} />
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>Your results</Text>
-              <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.6) }}>{ordinal(me.placement ?? 0)} place · {me.stats.wordsFound} words · longest {me.stats.longestWord ? me.stats.longestWord.toUpperCase() : '—'}</Text>
+              <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.72) }}>{ordinal(me.placement ?? 0)} place · {me.stats.wordsFound} words · longest {me.stats.longestWord ? me.stats.longestWord.toUpperCase() : '—'}</Text>
             </View>
             <Text style={[{ fontFamily: F.display, fontSize: 22, color: C.amber }, s.tabular]}>{me.totalScore}</Text>
           </View>
@@ -306,12 +316,12 @@ export function SoloResults({ s: g }: { s: GameState }) {
   return (
     <PageScroll>
       <FadeUp style={{ alignItems: 'center', paddingTop: 16 }}>
-        <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.55) }}>{`Time's up · ${g.source}`}</Text>
+        <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.7) }}>{`Time's up · ${g.source}`}</Text>
         <Text style={[{ fontFamily: F.display, fontSize: 72, color: C.amber }, s.tabular]}>{score}</Text>
         {g.newBest ? (
           <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.mint, backgroundColor: 'rgba(62,230,184,0.15)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, overflow: 'hidden' }}>New personal best</Text>
         ) : (
-          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.55) }}>Personal best <Text style={{ fontFamily: F.bodyBold, color: C.white }}>{g.personalBest}</Text></Text>
+          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.7) }}>Personal best <Text style={{ fontFamily: F.bodyBold, color: C.white }}>{g.personalBest}</Text></Text>
         )}
       </FadeUp>
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 22 }}>
@@ -324,10 +334,10 @@ export function SoloResults({ s: g }: { s: GameState }) {
       </View>
       <Text style={[s.eyebrow, { marginTop: 22, marginBottom: 8 }]}>All your words</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {me.roundWords.length === 0 && <Text style={{ fontFamily: F.body, color: w(0.5) }}>No words this time.</Text>}
+        {me.roundWords.length === 0 && <Text style={{ fontFamily: F.body, color: w(0.65) }}>No words this time.</Text>}
         {me.roundWords.slice().reverse().map((x) => (
           <Text key={x.word} style={{ fontFamily: F.displayBold, fontSize: 14, color: C.white, backgroundColor: w(0.05), paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, overflow: 'hidden' }}>
-            {x.word.toUpperCase()} <Text style={{ fontFamily: F.body, color: w(0.5) }}>+{x.points}</Text>
+            {x.word.toUpperCase()} <Text style={{ fontFamily: F.body, color: w(0.65) }}>+{x.points}</Text>
           </Text>
         ))}
       </View>
@@ -336,7 +346,7 @@ export function SoloResults({ s: g }: { s: GameState }) {
           <Text style={[s.eyebrow, { marginTop: 18, marginBottom: 8 }]}>Long ones you missed</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {g.missedLongest.map((x) => (
-              <Text key={x} style={{ fontFamily: F.displayBold, fontSize: 14, color: w(0.6), borderWidth: 1, borderColor: w(0.12), paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>{x.toUpperCase()}</Text>
+              <Text key={x} style={{ fontFamily: F.displayBold, fontSize: 14, color: w(0.72), borderWidth: 1, borderColor: w(0.12), paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>{x.toUpperCase()}</Text>
             ))}
           </View>
         </>
