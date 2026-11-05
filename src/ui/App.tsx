@@ -15,8 +15,13 @@ export function LastWordApp() {
   const g = useGame();
   const a = auth.account;
 
-  // Count finished elimination matches (and wins) toward the signed-in account.
-  useEffect(() => engine.onMatchEnd((won) => accounts.recordMatch(won)), []);
+  // Save each finished elimination match to the signed-in account.
+  useEffect(() => engine.onMatchEnd((r) => { void accounts.recordMatch(r); }), []);
+
+  // Save a new solo personal best to the profile.
+  useEffect(() => {
+    if (g.phase === 'sp-results' && g.newBest) void accounts.saveSoloBest(g.personalBest);
+  }, [g.phase, g.newBest, g.personalBest]);
 
   // Keep the game's player identity in step with the account.
   const id = a?.id;

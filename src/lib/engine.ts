@@ -31,6 +31,14 @@ export const BETWEEN_ROUNDS = 10_000;
 export const PREMATCH = 3_000;
 export const HUMAN_ID = 'you';
 
+export interface MatchResult {
+  won: boolean;
+  placement: number;
+  totalScore: number;
+  wordsFound: number;
+  longestWord: string;
+}
+
 export interface Elimination {
   round: number;
   playerId: string;
@@ -84,11 +92,11 @@ export class GameEngine {
   private lastSingleSource = '';
   private profileId = 'guest';
   private photo: string | null = null;
-  private matchListeners = new Set<(won: boolean) => void>();
+  private matchListeners = new Set<(r: MatchResult) => void>();
   private matchCounted = false;
 
-  /** Called once per finished elimination match (won = the human won). */
-  onMatchEnd(fn: (won: boolean) => void) { this.matchListeners.add(fn); return () => { this.matchListeners.delete(fn); }; }
+  /** Called once per finished elimination match for the human player. */
+  onMatchEnd(fn: (r: MatchResult) => void) { this.matchListeners.add(fn); return () => { this.matchListeners.delete(fn); }; }
 
   /** Bind the signed-in player's identity. */
   setProfile(id: string, name: string, photo: string | null) {
@@ -258,10 +266,17 @@ export class GameEngine {
   }
 
   /** Count the match for the human once: when they're knocked out or the match ends. */
-  private countMatch(won: boolean) {
+  private countMatch(won: boolean, placement: number) {
     if (this.matchCounted) return;
     this.matchCounted = true;
-    this.matchListeners.forEach((l) => l(won));
+    const me = this.state.players.find((p) => p.id === HUMAN_ID);
+    const result: MatchResult = {
+      won, placement,
+      totalScore: me?.totalScore ?? 0,
+      wordsFound: me?.stats.wordsFound ?? 0,
+      longestWord: me?.stats.longestWord ?? '',
+    };
+    this.matchListeners.forEach((l) => l(result));
   }
 
   private runBots() {
@@ -312,13 +327,13 @@ export class GameEngine {
       const winner = ranked[0];
       const final = players.map((p) => (p.id === winner.id ? { ...p, placement: 1 } : p));
       // Match decided: go straight to the winner screen.
-      this.countMatch(winner.id === HUMAN_ID);
+      this.countMatch(winner.id === HUMAN_ID, winner.id === HUMAN_ID ? 1 : 2);
       this.set({ accepting: false, players: final, lastElimination: elimination, winnerId: winner.id, phase: 'final', nextRoundAt: 0, awaitingChoice: false });
       return;
     }
 
     const humanOut = out.id === HUMAN_ID;
-    if (humanOut) this.countMatch(false);
+    if (humanOut) this.countMatch(false, placement);
     if (humanOut) {
       this.set({ accepting: false, players, lastElimination: elimination, phase: 'elimination', awaitingChoice: true, nextRoundAt: 0 });
       return;

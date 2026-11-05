@@ -1,15 +1,12 @@
-// ── Account system (local mock of an auth server) ──────────────────────────
-// Phone-number sign-in with a one-time code, onboarding profile, and weekly
-// match-win tracking. Everything here is stored on this device.
-//
-// In production these calls map onto a real backend:
-//   requestCode(phone)   → POST /auth/sms (server sends SMS via e.g. Twilio Verify)
-//   verifyCode(code)     → POST /auth/verify → session token
-//   saveProfile / delete → authenticated profile endpoints
-// Nothing in this prototype sends a real text message: the code is delivered
-// to the screen as a clearly labelled simulated SMS.
+// ── Account system (Supabase) ──────────────────────────────────────────────
+// Phone sign-in with a one-time code sent by text, player profiles, photos,
+// and match results, all stored in Supabase. The phone number lives only in
+// Supabase Auth; the public `profiles` table never contains it.
+import { decode } from 'base64-arraybuffer';
+
 import { kv } from './kv';
 import { countryByCode } from './regions';
+import { DEV_TEST_CODE, DEV_TEST_PHONE, supabase } from './supabase';
 
 export interface Account {
   id: string;
@@ -17,176 +14,199 @@ export interface Account {
   country: string; // ISO code
   region: string;
   name: string;
-  photo: string | null; // data: URI of a square-cropped photo
+  photo: string | null; // public URL
   createdAt: number;
   winsByWeek: Record<string, number>;
   /** Wins per local calendar day, "YYYY-MM-DD". */
-  winsByDay?: Record<string, number>;
+  winsByDay: Record<string, number>;
   totalWins: number;
   matchesPlayed: number;
-  dev?: boolean;
+  soloBest: number;
 }
 
-interface PendingCode { phone: string; country: string; code: string; expires: number; sentAt: number }
+export interface MatchRecord {
+  won: boolean;
+  placement: number;
+  totalScore: number;
+  wordsFound: number;
+  longestWord: string;
+}
+
+interface PendingCode { phone: string; country: string; sentAt: number }
 
 export interface AuthState {
+  /** False until the saved session has been checked at launch. */
+  ready: boolean;
   account: Account | null;
   /** Signed in but onboarding not finished. */
   onboarding: boolean;
   pending: PendingCode | null;
-  /** Most recent simulated SMS, for the on-screen banner. */
-  sms: { id: number; text: string; code: string } | null;
-  autofillCode: boolean;
 }
 
-const KEY_ACCOUNTS = 'lw.accounts';
-const KEY_SESSION = 'lw.session';
-const KEY_DEV = 'lw.dev.autofill';
-
-function read<T>(k: string, fallback: T): T {
-  try { const v = kv.get(k); return v ? (JSON.parse(v) as T) : fallback; } catch { return fallback; }
-}
-function write(k: string, v: unknown) {
-  kv.set(k, JSON.stringify(v));
-}
-function remove(k: string) {
-  kv.remove(k);
-}
+export type Period = 'day' | 'week' | 'month' | 'year' | 'all';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 /** Local calendar day key, e.g. "2026-11-05". */
 export function dayKey(d = new Date()): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-
-export type Period = 'day' | 'week' | 'month' | 'year' | 'all';
+/** Monday-based week key in local time, e.g. "2026-11-02". */
+export function weekKey(d = new Date()): string {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return dayKey(x);
+}
+export function weekRange(d = new Date()): { start: Date; end: Date } {
+  const [y, m, dd] = weekKey(d).split('-').map(Number);
+  return { start: new Date(y, m - 1, dd), end: new Date(y, m - 1, dd + 7) };
+}
 
 /** Wins in the current day / week / month / year, or all time. */
 export function winsFor(a: Account, period: Period, now = new Date()): number {
   if (period === 'all') return a.totalWins;
   if (period === 'week') return a.winsByWeek[weekKey(now)] ?? 0;
-  const days = a.winsByDay ?? {};
   const prefix = period === 'day' ? dayKey(now) : period === 'month' ? dayKey(now).slice(0, 7) : String(now.getFullYear());
   let n = 0;
-  for (const k in days) if (k.startsWith(prefix)) n += days[k];
+  for (const k in a.winsByDay) if (k.startsWith(prefix)) n += a.winsByDay[k];
   return n;
-}
-
-/** Older accounts only tracked weekly wins: credit them to that week's Monday. */
-function migrate(a: Account): Account {
-  if (a.winsByDay) return a;
-  const winsByDay: Record<string, number> = {};
-  for (const wk in a.winsByWeek) if (a.winsByWeek[wk]) winsByDay[wk] = (winsByDay[wk] ?? 0) + a.winsByWeek[wk];
-  return { ...a, winsByDay };
-}
-
-const addWin = (a: Account): Account => {
-  const wk = weekKey();
-  const dk = dayKey();
-  const days = a.winsByDay ?? {};
-  return {
-    ...a,
-    totalWins: a.totalWins + 1,
-    winsByWeek: { ...a.winsByWeek, [wk]: (a.winsByWeek[wk] ?? 0) + 1 },
-    winsByDay: { ...days, [dk]: (days[dk] ?? 0) + 1 },
-  };
-};
-
-/** Monday-based week key in local time, e.g. "2026-11-02". */
-export function weekKey(d = new Date()): string {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const day = (x.getDay() + 6) % 7; // Mon = 0
-  x.setDate(x.getDate() - day);
-  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
-}
-export function weekRange(d = new Date()): { start: Date; end: Date } {
-  const [y, m, dd] = weekKey(d).split('-').map(Number);
-  const start = new Date(y, m - 1, dd);
-  const end = new Date(y, m - 1, dd + 7);
-  return { start, end };
 }
 
 const isComplete = (a: Account) => !!a.name && !!a.region;
 
+/** Turn Supabase errors into short, player-facing messages. */
+function friendly(message: string | undefined): string {
+  const m = (message ?? '').toLowerCase();
+  if (m.includes('signups not allowed') || m.includes('user not found')) return 'No account uses this number yet.';
+  if (m.includes('expired') || m.includes('invalid')) return "That code isn't right or has expired. Check the text and try again.";
+  if (m.includes('rate') || m.includes('security purposes') || m.includes('too many')) return 'Too many attempts. Wait a minute and try again.';
+  if (m.includes('sms') || m.includes('provider') || m.includes('twilio')) return "We couldn't send a text right now. Try again in a moment.";
+  if (m.includes('network') || m.includes('fetch')) return "Can't reach the server. Check your connection.";
+  return 'Something went wrong. Try again.';
+}
+
+type Listener = () => void;
+
 class AccountStore {
-  private state!: AuthState;
-  private listeners = new Set<() => void>();
-  private smsSeq = 0;
+  private state: AuthState = { ready: false, account: null, onboarding: false, pending: null };
+  private listeners = new Set<Listener>();
+  /** Country chosen at sign-up, used to seed a brand-new profile. */
+  private signupCountry = 'US';
 
-  constructor() {
-    this.load();
-  }
-
-  /** (Re)read the session from storage. Call after storage hydrates. */
-  load() {
-    const accounts = read<Record<string, Account>>(KEY_ACCOUNTS, {});
-    const session = read<string | null>(KEY_SESSION, null);
-    const stored = session ? accounts[session] ?? null : null;
-    const account = stored ? migrate(stored) : null;
-    this.state = {
-      account,
-      onboarding: !!account && !isComplete(account),
-      pending: null,
-      sms: null,
-      autofillCode: read<boolean>(KEY_DEV, false),
-    };
-    this.listeners.forEach((l) => l());
-  }
-
-  subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
+  subscribe = (fn: Listener) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
   getState = () => this.state;
   private set(p: Partial<AuthState>) { this.state = { ...this.state, ...p }; this.listeners.forEach((l) => l()); }
 
-  private accounts() { return read<Record<string, Account>>(KEY_ACCOUNTS, {}); }
-  private persist(a: Account) {
-    const all = this.accounts();
-    all[a.id] = a;
-    write(KEY_ACCOUNTS, all);
+  /** Restore the saved session at launch. */
+  async load(): Promise<void> {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) await this.refresh();
+    } catch {
+      // Offline or misconfigured: fall through to the sign-in screens.
+    }
+    this.set({ ready: true });
   }
 
-  exists(phone: string) { return Object.values(this.accounts()).some((a) => a.phone === phone); }
+  /** Re-read the signed-in player's profile and results from the server. */
+  async refresh(): Promise<void> {
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user;
+    if (!user) { this.set({ account: null, onboarding: false }); return; }
 
-  /** "Send" a 6-digit code. Returns the E.164 number. */
-  requestCode(countryCode: string, nationalDigits: string): string {
+    let { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    if (!profile) {
+      const created = await supabase.from('profiles').insert({ id: user.id, country: this.signupCountry }).select('*').single();
+      profile = created.data;
+    }
+    const { data: results } = await supabase.from('match_results').select('won, played_at').eq('user_id', user.id);
+
+    const winsByDay: Record<string, number> = {};
+    const winsByWeek: Record<string, number> = {};
+    let totalWins = 0;
+    for (const r of results ?? []) {
+      if (!r.won) continue;
+      const d = new Date(r.played_at);
+      winsByDay[dayKey(d)] = (winsByDay[dayKey(d)] ?? 0) + 1;
+      winsByWeek[weekKey(d)] = (winsByWeek[weekKey(d)] ?? 0) + 1;
+      totalWins++;
+    }
+    // Keep the solo personal best in step between this phone and the server.
+    const localBest = Number(kv.get(`lw.best.${user.id}`) || 0) || 0;
+    const soloBest = Math.max(localBest, profile?.solo_best ?? 0);
+    if (soloBest > localBest) kv.set(`lw.best.${user.id}`, String(soloBest));
+
+    const account: Account = {
+      id: user.id,
+      phone: user.phone ? `+${user.phone.replace(/^\+/, '')}` : '',
+      country: profile?.country ?? 'US',
+      region: profile?.region ?? '',
+      name: profile?.name ?? '',
+      photo: profile?.photo_url ?? null,
+      createdAt: new Date(user.created_at).getTime(),
+      winsByDay, winsByWeek, totalWins,
+      matchesPlayed: results?.length ?? 0,
+      soloBest,
+    };
+    this.set({ account, onboarding: !isComplete(account) });
+  }
+
+  /** Text a 6-digit code. `mode: 'login'` refuses unknown numbers. Returns an error message or null. */
+  async requestCode(countryCode: string, nationalDigits: string, mode: 'create' | 'login'): Promise<string | null> {
     const c = countryByCode(countryCode);
     const phone = `${c.dial}${nationalDigits}`;
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    const id = ++this.smsSeq;
-    this.set({
-      pending: { phone, country: c.code, code, expires: Date.now() + 5 * 60_000, sentAt: Date.now() },
-      sms: { id, code, text: `Your Last word verification code is ${code}. It expires in 5 minutes.` },
-    });
-    return phone;
+    const { error } = await supabase.auth.signInWithOtp({ phone, options: { shouldCreateUser: mode === 'create', channel: 'sms' } });
+    if (error) return friendly(error.message);
+    this.signupCountry = c.code;
+    this.set({ pending: { phone, country: c.code, sentAt: Date.now() } });
+    return null;
   }
 
-  dismissSms() { this.set({ sms: null }); }
-
-  /** Returns 'ok' | 'wrong' | 'expired'. On success the user is signed in. */
-  verifyCode(code: string): 'ok' | 'wrong' | 'expired' {
+  /** Check the code; on success the player is signed in. Returns an error message or null. */
+  async verifyCode(code: string): Promise<string | null> {
     const p = this.state.pending;
-    if (!p) return 'expired';
-    if (Date.now() > p.expires) return 'expired';
-    if (code !== p.code) return 'wrong';
-    let account = Object.values(this.accounts()).find((a) => a.phone === p.phone) ?? null;
-    if (!account) {
-      account = {
-        id: `u_${Math.random().toString(36).slice(2, 10)}`, phone: p.phone, country: p.country, region: '',
-        name: '', photo: null, createdAt: Date.now(), winsByWeek: {}, winsByDay: {}, totalWins: 0, matchesPlayed: 0,
-      };
-      this.persist(account);
-    }
-    write(KEY_SESSION, account.id);
-    account = migrate(account);
-    this.set({ account, pending: null, sms: null, onboarding: !isComplete(account) });
-    return 'ok';
+    if (!p) return 'Send a new code first.';
+    const { error } = await supabase.auth.verifyOtp({ phone: p.phone, token: code, type: 'sms' });
+    if (error) return friendly(error.message);
+    await this.refresh();
+    this.set({ pending: null });
+    return null;
   }
 
-  update(patch: Partial<Pick<Account, 'name' | 'photo' | 'region' | 'country'>>) {
+  /** Save profile changes. A `photo` given as a data: URI is uploaded first. */
+  async update(patch: Partial<Pick<Account, 'name' | 'photo' | 'region' | 'country'>>): Promise<string | null> {
     const a = this.state.account;
-    if (!a) return;
-    const next = { ...a, ...patch };
-    this.persist(next);
+    if (!a) return null;
+    const row: Record<string, string | null> = {};
+    if (patch.name !== undefined) row.name = patch.name.trim() || null;
+    if (patch.region !== undefined) row.region = patch.region || null;
+    if (patch.country !== undefined) row.country = patch.country;
+    if (patch.photo !== undefined) {
+      if (patch.photo === null) {
+        await supabase.storage.from('avatars').remove([`${a.id}/avatar.jpg`]);
+        row.photo_url = null;
+      } else if (patch.photo.startsWith('data:')) {
+        const [, mime, b64] = patch.photo.match(/^data:([^;]+);base64,(.*)$/) ?? [];
+        if (!b64) return "That photo couldn't be read.";
+        const { error } = await supabase.storage.from('avatars').upload(`${a.id}/avatar.jpg`, decode(b64), { contentType: mime || 'image/jpeg', upsert: true });
+        if (error) return "Couldn't upload that photo. Try again.";
+        const { data } = supabase.storage.from('avatars').getPublicUrl(`${a.id}/avatar.jpg`);
+        row.photo_url = `${data.publicUrl}?v=${Date.now()}`; // bust image caches after a change
+      } else {
+        row.photo_url = patch.photo;
+      }
+    }
+    // Show the change right away, then save it.
+    const next: Account = {
+      ...a,
+      ...(row.name !== undefined ? { name: row.name ?? '' } : {}),
+      ...(row.region !== undefined ? { region: row.region ?? '' } : {}),
+      ...(row.country !== undefined ? { country: row.country ?? 'US' } : {}),
+      ...(row.photo_url !== undefined ? { photo: row.photo_url } : {}),
+    };
     this.set({ account: next });
+    const { error } = await supabase.from('profiles').update(row).eq('id', a.id);
+    if (error) { this.set({ account: a }); return "Couldn't save that change. Try again."; }
+    return null;
   }
 
   finishOnboarding() {
@@ -194,67 +214,79 @@ class AccountStore {
     if (a && isComplete(a)) this.set({ onboarding: false });
   }
 
-  logOut() {
-    remove(KEY_SESSION);
-    this.set({ account: null, onboarding: false, pending: null, sms: null });
+  async logOut() {
+    await supabase.auth.signOut().catch(() => {});
+    this.set({ account: null, onboarding: false, pending: null });
   }
 
-  deleteAccount() {
+  /** Permanently delete the account, photo, profile and results. */
+  async deleteAccount(): Promise<string | null> {
     const a = this.state.account;
-    if (!a) return;
-    const all = this.accounts();
-    delete all[a.id];
-    write(KEY_ACCOUNTS, all);
-    remove(`lw.best.${a.id}`);
-    this.logOut();
+    if (!a) return null;
+    await supabase.storage.from('avatars').remove([`${a.id}/avatar.jpg`]).catch(() => {});
+    const { error } = await supabase.rpc('delete_account');
+    if (error) return "Couldn't delete the account. Try again.";
+    kv.remove(`lw.best.${a.id}`);
+    await supabase.auth.signOut().catch(() => {});
+    this.set({ account: null, onboarding: false, pending: null });
+    return null;
   }
 
-  recordMatch(won: boolean) {
+  /** Save a finished elimination match. */
+  async recordMatch(m: MatchRecord) {
     const a = this.state.account;
     if (!a) return;
-    const played = { ...a, matchesPlayed: a.matchesPlayed + 1 };
-    const next: Account = won ? addWin(played) : played;
-    this.persist(next);
+    // Update the on-screen totals immediately.
+    const now = new Date();
+    const next: Account = { ...a, matchesPlayed: a.matchesPlayed + 1 };
+    if (m.won) {
+      next.totalWins = a.totalWins + 1;
+      next.winsByDay = { ...a.winsByDay, [dayKey(now)]: (a.winsByDay[dayKey(now)] ?? 0) + 1 };
+      next.winsByWeek = { ...a.winsByWeek, [weekKey(now)]: (a.winsByWeek[weekKey(now)] ?? 0) + 1 };
+    }
     this.set({ account: next });
+    await supabase.from('match_results').insert({
+      user_id: a.id, won: m.won, placement: m.placement, total_score: m.totalScore,
+      words_found: m.wordsFound, longest_word: m.longestWord || null,
+    });
   }
 
-  winsThisWeek(): number {
-    return this.state.account?.winsByWeek[weekKey()] ?? 0;
+  /** Save a new solo personal best to the profile. */
+  async saveSoloBest(score: number) {
+    const a = this.state.account;
+    if (!a || score <= a.soloBest) return;
+    this.set({ account: { ...a, soloBest: score } });
+    await supabase.from('profiles').update({ solo_best: score }).eq('id', a.id);
   }
 
   // ── developer controls ──
-  devSkipSignup() {
-    const phone = '+15555550100';
-    let account = Object.values(this.accounts()).find((a) => a.phone === phone) ?? null;
-    if (!account) {
-      account = {
-        id: 'u_devtester', phone, country: 'US', region: 'California', name: 'Dev tester', photo: null,
-        createdAt: Date.now(), winsByWeek: {}, winsByDay: {}, totalWins: 0, matchesPlayed: 0, dev: true,
-      };
-      this.persist(account);
+  /** Signs in with the Supabase test number and its fixed code (no text is sent). */
+  async devSkipSignup(): Promise<string | null> {
+    if (!DEV_TEST_PHONE || !DEV_TEST_CODE) return 'No developer test number is set in .env.';
+    const { error } = await supabase.auth.signInWithOtp({ phone: DEV_TEST_PHONE, options: { shouldCreateUser: true } });
+    if (error) return `Developer sign-in failed: ${friendly(error.message)} Make sure the test number is added in Supabase.`;
+    this.state.pending = { phone: DEV_TEST_PHONE, country: 'US', sentAt: Date.now() };
+    const err = await this.verifyCode(DEV_TEST_CODE);
+    if (err) return err;
+    const a = this.state.account;
+    if (a && !isComplete(a)) {
+      await this.update({ name: a.name || 'Dev tester', region: a.region || 'California', country: 'US' });
+      this.finishOnboarding();
     }
-    write(KEY_SESSION, account.id);
-    account = migrate(account);
-    this.set({ account, onboarding: false, pending: null, sms: null });
+    return null;
   }
-  devRestartOnboarding() {
-    const a = this.state.account;
-    if (!a) return;
-    const next = { ...a, name: '', region: '', photo: null };
-    this.persist(next);
-    this.set({ account: next, onboarding: true });
+  async devRestartOnboarding() {
+    await this.update({ name: '', region: '', photo: null }).catch(() => null);
+    this.set({ onboarding: true });
   }
-  devAddWin() {
-    const a = this.state.account;
-    if (!a) return;
-    const next = addWin({ ...a, matchesPlayed: a.matchesPlayed + 1 });
-    this.persist(next);
-    this.set({ account: next });
+  /** Records a real test win for this account (it shows up in stats and ranks). */
+  async devAddWin() {
+    await this.recordMatch({ won: true, placement: 1, totalScore: 0, wordsFound: 0, longestWord: '' });
   }
-  devSetAutofill(on: boolean) { write(KEY_DEV, on); this.set({ autofillCode: on }); }
-  devResetAll() {
+  /** Signs out and clears this phone's local data (server data is untouched). */
+  async devResetAll() {
     kv.keys().filter((k) => k.startsWith('lw.')).forEach((k) => kv.remove(k));
-    this.set({ account: null, onboarding: false, pending: null, sms: null, autofillCode: false });
+    await this.logOut();
   }
 }
 

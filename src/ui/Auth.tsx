@@ -1,12 +1,12 @@
 import * as Haptics from 'expo-haptics';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, type TextInputInstance } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
 import { accounts } from '@/lib/account';
 import { COUNTRIES, countryByCode, formatPhone } from '@/lib/regions';
 import { AnimatedTileLogo } from './AnimatedLogo';
-import { Avatar, Button, FadeUp, inputStyle, OptionSheet, s, Screen, SelectRow, Sheet, Toggle, useAuth, useNow } from './kit';
+import { Avatar, Button, FadeUp, inputStyle, OptionSheet, s, Screen, SelectRow, Sheet, useAuth, useNow } from './kit';
 import { pickPhoto } from './photo';
 import { C, F, w } from './theme';
 
@@ -42,53 +42,32 @@ function DevRow({ title, sub, onPress, right, danger, armed }: { title: string; 
 }
 
 export function DevControls({ open, onClose, signedIn }: { open: boolean; onClose: () => void; signedIn: boolean }) {
-  const auth = useAuth();
   const [confirmReset, setConfirmReset] = useState(false);
-  const close = () => { setConfirmReset(false); onClose(); };
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const close = () => { setConfirmReset(false); setMsg(null); onClose(); };
+  const run = async (fn: () => Promise<string | null | void>, closeAfter = true) => {
+    setBusy(true); setMsg(null);
+    const err = await fn();
+    setBusy(false);
+    if (err) setMsg(err);
+    else if (closeAfter) close();
+  };
   return (
     <Sheet open={open} onClose={close} title="Developer controls">
       <View style={{ gap: 8 }}>
-        {!signedIn && <DevRow title="Skip sign-up and onboarding" sub="Signs in as “Dev tester” · +1 555-555-0100 · California" onPress={() => { accounts.devSkipSignup(); close(); }} right={<Text style={{ color: w(0.4) }}>→</Text>} />}
+        {!signedIn && <DevRow title={busy ? 'Signing in…' : 'Skip sign-up and onboarding'} sub="Signs in with the Supabase test number from .env (no text is sent)" onPress={busy ? undefined : () => run(() => accounts.devSkipSignup())} right={<Text style={{ color: w(0.4) }}>→</Text>} />}
         {signedIn && (
           <>
-            <DevRow title="Add a win this week" sub="Test how you move up the ranks" onPress={() => { accounts.devAddWin(); Haptics.selectionAsync().catch(() => {}); }} right={<Text style={{ fontFamily: F.display, color: C.mint }}>+1</Text>} />
-            <DevRow title="Restart onboarding" sub="Clears name, photo and region for this account" onPress={() => { accounts.devRestartOnboarding(); close(); }} right={<Text style={{ color: w(0.4) }}>→</Text>} />
+            <DevRow title="Add a test win" sub="Saves a real win to this account so you can test ranks" onPress={() => { Haptics.selectionAsync().catch(() => {}); run(() => accounts.devAddWin(), false); }} right={<Text style={{ fontFamily: F.display, color: C.mint }}>+1</Text>} />
+            <DevRow title="Restart onboarding" sub="Clears name, photo and region for this account" onPress={() => run(() => accounts.devRestartOnboarding())} right={<Text style={{ color: w(0.4) }}>→</Text>} />
           </>
         )}
-        <DevRow title="Auto-fill verification codes" sub="Enters the code for you after it's “sent”" right={<Toggle on={auth.autofillCode} onChange={(v) => accounts.devSetAutofill(v)} label="Auto-fill verification codes" />} />
-        <DevRow danger armed={confirmReset} title={confirmReset ? 'Tap again to erase everything' : 'Reset all app data'} sub="Removes every account, stat and setting on this phone"
-          onPress={() => { if (confirmReset) { accounts.devResetAll(); close(); } else setConfirmReset(true); }} />
+        <DevRow danger armed={confirmReset} title={confirmReset ? 'Tap again to sign out and clear' : 'Reset this phone'} sub="Signs out and clears data saved on this phone (server data stays)"
+          onPress={() => { if (confirmReset) run(() => accounts.devResetAll()); else setConfirmReset(true); }} />
+        {msg && <Text style={{ fontFamily: F.body, fontSize: 13, color: C.coral, marginTop: 4 }}>{msg}</Text>}
       </View>
     </Sheet>
-  );
-}
-
-// ── Simulated text-message banner ──────────────────────────────────────────
-function SmsBanner({ onUse }: { onUse: (code: string) => void }) {
-  const { sms } = useAuth();
-  const y = useSharedValue(-160);
-  useEffect(() => {
-    if (!sms) return;
-    y.set(withSpring(0, { damping: 16 }));
-    const t = setTimeout(() => accounts.dismissSms(), 9000);
-    return () => clearTimeout(t);
-  }, [sms, y]);
-  const st = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() }] }));
-  if (!sms) return null;
-  return (
-    <Animated.View style={[{ position: 'absolute', left: 10, right: 10, top: 6, zIndex: 40 }, st]}>
-      <Pressable onPress={() => { onUse(sms.code); accounts.dismissSms(); }} accessibilityLabel="Message with your code. Tap to fill it in."
-        style={{ flexDirection: 'row', gap: 12, borderRadius: 22, borderWidth: 1, borderColor: w(0.1), backgroundColor: 'rgba(35,38,58,0.97)', padding: 12, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 20, shadowOffset: { width: 0, height: 12 } }}>
-        <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#29C64B', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 18 }}>💬</Text></View>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ fontFamily: F.bodyBold, fontSize: 13, color: C.white }}>Messages</Text>
-            <Text style={{ fontFamily: F.body, fontSize: 13, color: w(0.45) }}>now</Text>
-          </View>
-          <Text style={{ fontFamily: F.body, fontSize: 13, lineHeight: 18, color: w(0.88) }}>{sms.text}</Text>
-        </View>
-      </Pressable>
-    </Animated.View>
   );
 }
 
@@ -101,19 +80,19 @@ export function AuthFlow() {
   const [country, setCountry] = useState('US');
   const [digits, setDigits] = useState('');
   const [error, setError] = useState<{ text: string; action?: boolean } | null>(null);
+  const [sending, setSending] = useState(false);
   const [dev, setDev] = useState(false);
   const [pickCountry, setPickCountry] = useState(false);
   const c = countryByCode(country);
   const valid = c.digits.includes(digits.length);
 
-  const sendCode = () => {
-    if (!valid) return;
-    if (mode === 'login' && !accounts.exists(`${c.dial}${digits}`)) {
-      setError({ text: 'No account uses this number yet.', action: true });
-      return;
-    }
-    accounts.requestCode(country, digits);
+  const sendCode = async () => {
+    if (!valid || sending) return;
+    setSending(true);
     setError(null);
+    const err = await accounts.requestCode(country, digits, mode);
+    setSending(false);
+    if (err) { setError({ text: err, action: mode === 'login' && err.startsWith('No account') }); return; }
     setStep('code');
   };
 
@@ -141,7 +120,7 @@ export function AuthFlow() {
   if (step === 'phone') {
     return (
       <Step footer={<>
-        <Button title="Send code" onPress={sendCode} disabled={!valid} />
+        <Button title={sending ? 'Sending…' : 'Send code'} onPress={sendCode} disabled={!valid || sending} />
         <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 12, color: w(0.45) }}>{"We'll send a 6-digit verification code by text."}</Text>
       </>}>
         <BackButton onPress={() => { setStep('welcome'); setError(null); }} />
@@ -174,70 +153,62 @@ export function AuthFlow() {
     );
   }
 
-  return <CodeStep phoneLabel={`${c.dial} ${formatPhone(c, digits)}`} onBack={() => setStep('phone')} onResend={() => accounts.requestCode(country, digits)} />;
+  return <CodeStep phoneLabel={`${c.dial} ${formatPhone(c, digits)}`} onBack={() => setStep('phone')} onResend={() => accounts.requestCode(country, digits, mode)} />;
 }
 
-function CodeStep({ phoneLabel, onBack, onResend }: { phoneLabel: string; onBack: () => void; onResend: () => void }) {
+function CodeStep({ phoneLabel, onBack, onResend }: { phoneLabel: string; onBack: () => void; onResend: () => Promise<string | null> }) {
   const auth = useAuth();
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
   const inputRef = useRef<TextInputInstance>(null);
   const shake = useSharedValue(0);
   const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shake.get() }] }));
   const now = useNow(true, 500);
-  const wait = Math.max(0, Math.ceil(((auth.pending?.sentAt ?? 0) + 30_000 - now) / 1000));
+  const wait = Math.max(0, Math.ceil(((auth.pending?.sentAt ?? 0) + 60_000 - now) / 1000));
 
-  const onChange = (v: string) => {
+  const onChange = async (v: string) => {
     const d = v.replace(/\D/g, '').slice(0, 6);
     setCode(d);
     setError(null);
-    if (d.length < 6) return;
-    const r = accounts.verifyCode(d);
-    if (r === 'ok') { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); return; }
-    setError(r === 'wrong' ? "That code isn't right. Check the text and try again." : 'That code expired. Send a new one.');
+    if (d.length < 6 || checking) return;
+    setChecking(true);
+    const err = await accounts.verifyCode(d);
+    setChecking(false);
+    if (!err) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); return; }
+    setError(err);
     setCode('');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
     shake.set(withSequence(...[-8, 8, -6, 5, 0].map((x) => withTiming(x, { duration: 60 }))));
   };
 
-  const pendingCode = auth.pending?.code;
-  useEffect(() => {
-    if (!auth.autofillCode || !pendingCode) return;
-    const t = setTimeout(() => onChange(pendingCode), 1200);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.autofillCode, pendingCode]);
-
   return (
-    <View style={{ flex: 1 }}>
-      <Step>
-        <BackButton onPress={onBack} />
-        <Text style={[s.h1, { marginTop: 12 }]}>Enter your code</Text>
-        <Text style={[s.body, { marginTop: 8 }]}>We texted a 6-digit code to <Text style={{ fontFamily: F.bodyBold, color: C.white }}>{phoneLabel}</Text>.</Text>
-        <Pressable onPress={() => inputRef.current?.focus()} style={{ marginTop: 28 }}>
-          <Animated.View style={[{ flexDirection: 'row', gap: 8 }, shakeStyle]}>
-            {Array.from({ length: 6 }, (_, i) => {
-              const active = i === code.length;
-              return (
-                <View key={i} style={{ flex: 1, height: 58, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(4,10,22,0.7)', borderColor: error ? 'rgba(255,93,115,0.6)' : active ? 'rgba(61,139,255,0.8)' : w(0.1) }}>
-                  <Text style={{ fontFamily: F.display, fontSize: 26, color: C.white }}>{code[i] ?? ''}</Text>
-                </View>
-              );
-            })}
-          </Animated.View>
-          <TextInput ref={inputRef} autoFocus value={code} onChangeText={onChange} keyboardType="number-pad" textContentType="oneTimeCode" autoComplete="sms-otp"
-            maxLength={6} caretHidden keyboardAppearance="dark" accessibilityLabel="Verification code" style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} />
+    <Step>
+      <BackButton onPress={onBack} />
+      <Text style={[s.h1, { marginTop: 12 }]}>Enter your code</Text>
+      <Text style={[s.body, { marginTop: 8 }]}>We texted a 6-digit code to <Text style={{ fontFamily: F.bodyBold, color: C.white }}>{phoneLabel}</Text>.</Text>
+      <Pressable onPress={() => inputRef.current?.focus()} style={{ marginTop: 28 }}>
+        <Animated.View style={[{ flexDirection: 'row', gap: 8, opacity: checking ? 0.6 : 1 }, shakeStyle]}>
+          {Array.from({ length: 6 }, (_, i) => {
+            const active = i === code.length;
+            return (
+              <View key={i} style={{ flex: 1, height: 58, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(4,10,22,0.7)', borderColor: error ? 'rgba(255,93,115,0.6)' : active ? 'rgba(61,139,255,0.8)' : w(0.1) }}>
+                <Text style={{ fontFamily: F.display, fontSize: 26, color: C.white }}>{code[i] ?? ''}</Text>
+              </View>
+            );
+          })}
+        </Animated.View>
+        <TextInput ref={inputRef} autoFocus value={code} onChangeText={onChange} keyboardType="number-pad" textContentType="oneTimeCode" autoComplete="sms-otp"
+          maxLength={6} caretHidden editable={!checking} keyboardAppearance="dark" accessibilityLabel="Verification code" style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} />
+      </Pressable>
+      <Text style={{ minHeight: 20, marginTop: 12, fontFamily: F.body, fontSize: 14, color: checking ? w(0.6) : C.coral }}>{checking ? 'Checking…' : error ?? ''}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+        <Pressable onPress={onBack} hitSlop={8}><Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.65) }}>Change number</Text></Pressable>
+        <Pressable disabled={wait > 0} onPress={async () => { setCode(''); setError(await onResend()); }} hitSlop={8}>
+          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: wait > 0 ? w(0.35) : C.primary }}>{wait > 0 ? `Resend code in ${wait}s` : 'Resend code'}</Text>
         </Pressable>
-        <Text style={{ minHeight: 20, marginTop: 12, fontFamily: F.body, fontSize: 14, color: C.coral }}>{error ?? ''}</Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-          <Pressable onPress={onBack} hitSlop={8}><Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.65) }}>Change number</Text></Pressable>
-          <Pressable disabled={wait > 0} onPress={() => { onResend(); setCode(''); setError(null); }} hitSlop={8}>
-            <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: wait > 0 ? w(0.35) : C.primary }}>{wait > 0 ? `Resend code in ${wait}s` : 'Resend code'}</Text>
-          </Pressable>
-        </View>
-      </Step>
-      <SmsBanner onUse={onChange} />
-    </View>
+      </View>
+    </Step>
   );
 }
 
@@ -253,6 +224,7 @@ export function Onboarding() {
   const [name, setName] = useState(account?.name ?? '');
   const [photoErr, setPhotoErr] = useState<string | null>(null);
   const [sheet, setSheet] = useState<null | 'country' | 'region'>(null);
+  const [uploading, setUploading] = useState(false);
   if (!account) return null;
   const country = countryByCode(account.country);
   const nErr = nameError(name);
@@ -260,8 +232,12 @@ export function Onboarding() {
   const choose = async (source: 'library' | 'camera') => {
     const r = await pickPhoto(source);
     if (!r) return;
-    if ('error' in r) setPhotoErr(r.error);
-    else { setPhotoErr(null); accounts.update({ photo: r.uri }); }
+    if ('error' in r) { setPhotoErr(r.error); return; }
+    setPhotoErr(null);
+    setUploading(true);
+    const err = await accounts.update({ photo: r.uri });
+    setUploading(false);
+    if (err) setPhotoErr(err);
   };
 
   const dots = (
@@ -294,7 +270,7 @@ export function Onboarding() {
   if (step === 1) {
     return (
       <Step footer={account.photo ? <>
-        <Button title="Continue" onPress={() => setStep(2)} />
+        <Button title={uploading ? 'Uploading…' : 'Continue'} disabled={uploading} onPress={() => setStep(2)} />
         <Button title="Choose a different photo" variant="ghost" onPress={() => choose('library')} />
       </> : <>
         <Button title="Choose a photo" onPress={() => choose('library')} />

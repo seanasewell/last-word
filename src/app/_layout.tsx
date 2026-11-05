@@ -25,12 +25,13 @@ export default function RootLayout() {
   const [stored, setStored] = useState(false);
 
   useEffect(() => {
-    hydrate().then(() => {
-      // Storage is ready: restore the signed-in account (if any).
-      accounts.load();
-      initSound();
-      setStored(true);
-    });
+    hydrate()
+      .then(() => {
+        initSound();
+        // Restore the signed-in account (if any) before showing the app.
+        return accounts.load();
+      })
+      .finally(() => setStored(true));
   }, []);
 
   const ready = (fontsLoaded || !!fontError) && stored;

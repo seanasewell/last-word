@@ -251,8 +251,19 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
     setSheet(null);
     const r = await pickPhoto(source);
     if (!r) return;
-    if ('error' in r) setPhotoErr(r.error);
-    else { setPhotoErr(null); accounts.update({ photo: r.uri }); }
+    if ('error' in r) { setPhotoErr(r.error); return; }
+    setPhotoErr(null);
+    const err = await accounts.update({ photo: r.uri });
+    if (err) setPhotoErr(err);
+  };
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const remove = async () => {
+    setDeleting(true);
+    const err = await accounts.deleteAccount();
+    setDeleting(false);
+    if (err) setDeleteErr(err);
+    else setSheet(null);
   };
   const wins = (p: Period) => winsFor(account, p);
   const row = { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: w(0.06) };
@@ -329,7 +340,7 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         <View style={{ gap: 10 }}>
           <Button title="Choose from library" onPress={() => choose('library')} />
           <Button title="Take a photo" variant="ghost" onPress={() => choose('camera')} />
-          {account.photo && <Pressable onPress={() => { accounts.update({ photo: null }); setSheet(null); }} style={{ alignItems: 'center', paddingVertical: 10 }}><Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.coral }}>Remove photo</Text></Pressable>}
+          {account.photo && <Pressable onPress={() => { void accounts.update({ photo: null }); setSheet(null); }} style={{ alignItems: 'center', paddingVertical: 10 }}><Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.coral }}>Remove photo</Text></Pressable>}
         </View>
       </Sheet>
       <OptionSheet open={sheet === 'country'} onClose={() => setSheet(null)} title="Country" value={account.country}
@@ -341,14 +352,15 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         <Text style={s.body}>You can log back in any time with {maskPhone(account.phone)}.</Text>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
           <Button title="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => setSheet(null)} />
-          <Button title="Log out" style={{ flex: 1 }} onPress={() => { setSheet(null); accounts.logOut(); }} />
+          <Button title="Log out" style={{ flex: 1 }} onPress={() => { setSheet(null); void accounts.logOut(); }} />
         </View>
       </Sheet>
       <Sheet open={sheet === 'delete'} onClose={() => setSheet(null)} title="Delete your account?">
         <Text style={s.body}>{"This permanently removes your profile, photo, wins and stats. This can't be undone."}</Text>
+        {deleteErr && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral }}>{deleteErr}</Text>}
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-          <Button title="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => setSheet(null)} />
-          <Button title="Delete account" variant="danger" style={{ flex: 1 }} onPress={() => { setSheet(null); accounts.deleteAccount(); }} />
+          <Button title="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => { setDeleteErr(null); setSheet(null); }} />
+          <Button title={deleting ? 'Deleting…' : 'Delete account'} variant="danger" disabled={deleting} style={{ flex: 1 }} onPress={remove} />
         </View>
       </Sheet>
       <DevControls open={sheet === 'dev'} onClose={() => setSheet(null)} signedIn />
