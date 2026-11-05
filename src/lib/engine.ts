@@ -417,6 +417,26 @@ export class GameEngine {
 
   // ── online play ──────────────────────────────────────────────────────────
 
+  /** If this player is still in an unfinished online match (e.g. the app was closed mid-round), go back into it. */
+  async resumeIfInMatch() {
+    if (this.online || this.state.phase !== 'menu') return;
+    const t = this.token;
+    try {
+      const { data } = await supabase.rpc('mm_current');
+      if (!data || t !== this.token || this.online || this.state.phase !== 'menu') return;
+      this.clearTimers();
+      this.matchCounted = false;
+      this.set({ mode: 'multi', matchId: newId(), round: 0, source: '', usedSources: [], players: [], winnerId: null, lastElimination: null, spectating: false, awaitingChoice: false, accepting: false });
+      this.online = {
+        matchId: data as string, myPid: '', offset: 0, bestRtt: Infinity, snap: null, round: 0,
+        extras: new Map(), queue: [], flushScheduled: false, choice: 'none', done: false,
+      };
+      void this.poll(this.token, this.online);
+    } catch {
+      // Offline: stay on the menu.
+    }
+  }
+
   private async joinOnline(t: number) {
     try {
       const { data: sess } = await supabase.auth.getSession();

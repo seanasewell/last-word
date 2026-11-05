@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { AppState } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { accounts } from '@/lib/account';
@@ -31,6 +32,15 @@ export function LastWordApp() {
     if (id) engine.setProfile(id, name || 'You', photo);
     else engine.goMenu();
   }, [id, name, photo]);
+
+  // Back into an unfinished match after the app was closed (on launch and when it returns to the foreground).
+  const ready = !!id && !auth.onboarding;
+  useEffect(() => {
+    if (!ready) return;
+    void engine.resumeIfInMatch();
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') void engine.resumeIfInMatch(); });
+    return () => sub.remove();
+  }, [ready, id]);
 
   let key: string;
   let screen: React.ReactNode;

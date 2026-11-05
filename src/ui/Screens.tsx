@@ -205,7 +205,6 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
           return <Row key={row.id} p={p} rank={String(i + 1)} out={row.id === e.playerId} highlight={p.id === HUMAN_ID ? 'you' : undefined} right={num(row.roundScore)} />;
         })}
       </View>
-      <Text style={{ marginTop: 'auto', paddingTop: 24, textAlign: 'center', fontFamily: F.body, fontSize: 12, color: w(0.6) }}>A new word is revealed when the round begins</Text>
     </PageScroll>
   );
 }
