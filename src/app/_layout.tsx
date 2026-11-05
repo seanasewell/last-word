@@ -7,8 +7,9 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
-import { engine } from '@/lib/engine';
+import { accounts } from '@/lib/account';
 import { hydrate } from '@/lib/kv';
+import { initSound } from '@/ui/sound';
 import { C } from '@/ui/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -25,8 +26,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     hydrate().then(() => {
-      // Loads the saved personal best now that storage is ready.
-      engine.setProfile('guest', 'You', null);
+      // Storage is ready: restore the signed-in account (if any).
+      accounts.load();
+      initSound();
       setStored(true);
     });
   }, []);

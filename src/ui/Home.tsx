@@ -1,18 +1,26 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { engine, HUMAN_ID, type GameState } from '@/lib/engine';
+import { accounts, weekRange, winsFor, type Account, type Period } from '@/lib/account';
+import { engine, type GameState } from '@/lib/engine';
+import { buildRanking, type RankEntry, type Scope } from '@/lib/ranks';
+import { COUNTRIES, countryByCode, maskPhone } from '@/lib/regions';
 import { scoreWord } from '@/lib/words';
-import { Avatar, Card, FadeUp, s, Screen, TileLogo } from './kit';
+import { cleanName, DevControls, NAME_MAX, nameError } from './Auth';
+import { Avatar, Button, Card, FadeUp, inputStyle, OptionSheet, ordinal, s, Screen, Sheet, TileLogo, Toggle, useNow } from './kit';
+import { pickPhoto } from './photo';
+import { onSoundChange, setSoundEnabled, soundEnabled } from './sound';
 import { C, F, w } from './theme';
 
 type Tab = 'play' | 'ranks' | 'profile';
 let rememberedTab: Tab = 'play';
+let rememberedFor = '';
 
-const ME = { glyph: 'Y', hue: 210, id: HUMAN_ID };
+const meAvatar = (a: Account) => ({ glyph: a.name[0]?.toUpperCase() ?? 'Y', hue: 210, isYou: true, photo: a.photo });
 
-function TabBar({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
+function TabBar({ tab, onChange, account }: { tab: Tab; onChange: (t: Tab) => void; account: Account }) {
   const insets = useSafeAreaInsets();
   const items: { id: Tab; label: string; emoji?: string }[] = [
     { id: 'play', label: 'Play', emoji: '🔤' },
@@ -27,7 +35,7 @@ function TabBar({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
           <Pressable key={t.id} onPress={() => onChange(t.id)} accessibilityRole="tab" accessibilityState={{ selected: active }}
             style={({ pressed }) => ({ flex: 1, alignItems: 'center', gap: 4, transform: [{ scale: pressed ? 0.94 : 1 }] })}>
             <View style={{ height: 26, justifyContent: 'center', opacity: active ? 1 : 0.6 }}>
-              {t.emoji ? <Text style={{ fontSize: 23 }}>{t.emoji}</Text> : <Avatar player={ME} size={26} />}
+              {t.emoji ? <Text style={{ fontSize: 23 }}>{t.emoji}</Text> : <Avatar player={meAvatar(account)} size={26} />}
             </View>
             <Text style={{ fontFamily: F.bodySemi, fontSize: 11, color: active ? C.white : w(0.6) }}>{t.label}</Text>
           </Pressable>
@@ -95,28 +103,273 @@ function PlayTab({ best }: { best: number }) {
   );
 }
 
-function ComingNext({ title, text }: { title: string; text: string }) {
+// ── Ranks ──────────────────────────────────────────────────────────────────
+const PERIODS: { id: Period; label: string; phrase: string }[] = [
+  { id: 'day', label: 'Today', phrase: 'today' },
+  { id: 'week', label: 'Week', phrase: 'this week' },
+  { id: 'month', label: 'Month', phrase: 'this month' },
+  { id: 'year', label: 'Year', phrase: 'this year' },
+  { id: 'all', label: 'All time', phrase: 'all time' },
+];
+const fmtDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+function periodRange(period: Period, now: Date): string {
+  if (period === 'day') return now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  if (period === 'week') {
+    const { start, end } = weekRange(now);
+    return `${fmtDay(start)} – ${fmtDay(new Date(end.getTime() - 86_400_000))}`;
+  }
+  if (period === 'month') return now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  if (period === 'year') return String(now.getFullYear());
+  return 'Since launch';
+}
+
+function resetText(period: Period, now: number): string | null {
+  const d = new Date(now);
+  let end: Date;
+  if (period === 'day') end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+  else if (period === 'week') end = weekRange(d).end;
+  else if (period === 'month') end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  else if (period === 'year') end = new Date(d.getFullYear() + 1, 0, 1);
+  else return null;
+  const left = end.getTime() - now;
+  const days = Math.floor(left / 86_400_000);
+  const hours = Math.floor((left % 86_400_000) / 3_600_000);
+  const mins = Math.floor((left % 3_600_000) / 60_000);
+  const when = days > 0 ? `${days}d ${hours}h` : hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+  const label = { day: 'Resets at midnight', week: 'Resets Monday', month: 'Resets on the 1st', year: 'Resets January 1' }[period];
+  return `${label} · ${when} left`;
+}
+
+function Segmented<T extends string>({ options, value, onChange, small = false }: { options: { id: T; label: string }[]; value: T; onChange: (v: T) => void; small?: boolean }) {
   return (
-    <View>
-      <Text style={s.h1}>{title}</Text>
-      <Card style={{ marginTop: 16, padding: 20 }}>
-        <Text style={s.body}>{text}</Text>
-      </Card>
+    <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 4, padding: 4, borderRadius: 16, backgroundColor: w(0.05) }}>
+      {options.map((x) => {
+        const on = value === x.id;
+        return (
+          <Pressable key={x.id} onPress={() => onChange(x.id)} accessibilityRole="tab" accessibilityState={{ selected: on }}
+            style={{ flex: 1, height: small ? 32 : 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.ink700 : 'transparent' }}>
+            <Text numberOfLines={1} style={{ fontFamily: F.bodySemi, fontSize: small ? 12 : 13, color: on ? C.white : w(0.6) }}>{x.label}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
-export function Home({ s: g }: { s: GameState }) {
-  const [tab, setTabState] = useState<Tab>(rememberedTab);
-  const setTab = (t: Tab) => { rememberedTab = t; setTabState(t); };
+function RankRow({ e, scope }: { e: RankEntry; scope: Scope }) {
+  const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : null;
+  const where = scope === 'world' ? `${e.country.flag} ${e.country.name}` : scope === 'national' ? e.region : `${e.country.flag} ${e.region}`;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16,
+      backgroundColor: e.isYou ? 'rgba(61,139,255,0.15)' : e.rank <= 3 ? 'rgba(255,181,71,0.06)' : w(0.03), borderWidth: e.isYou ? 1 : 0, borderColor: 'rgba(61,139,255,0.4)' }}>
+      <View style={{ width: 30, alignItems: 'center' }}>
+        {medal ? <Text style={{ fontSize: 20 }}>{medal}</Text> : <Text style={[{ fontFamily: F.displayBold, fontSize: 14, color: w(0.55) }, s.tabular]}>{e.rank}</Text>}
+      </View>
+      <Avatar player={{ glyph: e.glyph, hue: e.hue, photo: e.photo, isYou: e.isYou }} size={34} />
+      <View style={{ flex: 1 }}>
+        <Text numberOfLines={1} style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>{e.name}</Text>
+        <Text numberOfLines={1} style={{ fontFamily: F.body, fontSize: 11, color: w(0.5) }}>{where}</Text>
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        <Text style={[{ fontFamily: F.display, fontSize: 18, color: C.white }, s.tabular]}>{e.wins}</Text>
+        <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.45) }}>{e.wins === 1 ? 'win' : 'wins'}</Text>
+      </View>
+    </View>
+  );
+}
+
+function RanksTab({ account }: { account: Account }) {
+  const [scope, setScope] = useState<Scope>('world');
+  const [period, setPeriod] = useState<Period>('week');
+  const country = countryByCode(account.country);
+  const myWins = winsFor(account, period);
+  const now = useNow(true, 30_000);
+  const day = new Date(now).toDateString();
+  const { entries, you } = useMemo(() => buildRanking(scope, account, myWins, period), [scope, account, myWins, period, day]); // eslint-disable-line react-hooks/exhaustive-deps
+  const scopes: { id: Scope; label: string }[] = [
+    { id: 'world', label: '🌍 World' },
+    { id: 'national', label: `${country.flag} National` },
+    { id: 'state', label: `📍 ${country.regionLabel}` },
+  ];
+  const p = PERIODS.find((x) => x.id === period)!;
+  const scopeName = scope === 'world' ? 'in the world' : scope === 'national' ? `in ${country.name}` : `in ${account.region}`;
+  const reset = resetText(period, now);
+  return (
+    <View>
+      <Text style={s.h1}>Ranks</Text>
+      <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.6), marginTop: 4 }}>Most elimination-match wins · {periodRange(period, new Date(now))}</Text>
+      <View style={{ gap: 8, marginTop: 16 }}>
+        <Segmented options={scopes} value={scope} onChange={setScope} />
+        <Segmented options={PERIODS} value={period} onChange={setPeriod} small />
+      </View>
+      <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(61,139,255,0.35)', backgroundColor: 'rgba(61,139,255,0.1)', padding: 16 }}>
+        <Avatar player={meAvatar(account)} size={44} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.6) }}>Your rank {scopeName}</Text>
+          <Text style={{ fontFamily: F.display, fontSize: 24, color: C.white }}>{ordinal(you.rank)}</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[{ fontFamily: F.display, fontSize: 24, color: C.mint }, s.tabular]}>{myWins}</Text>
+          <Text style={{ fontFamily: F.body, fontSize: 11, color: w(0.55) }}>{myWins === 1 ? 'win' : 'wins'} {p.phrase}</Text>
+        </View>
+      </View>
+      {reset && <Text style={{ alignSelf: 'flex-end', marginTop: 8, fontFamily: F.body, fontSize: 11, color: w(0.45) }}>{reset}</Text>}
+      <View style={{ gap: 6, marginTop: 8 }}>
+        {entries.map((e) => <RankRow key={e.id} e={e} scope={scope} />)}
+        {!entries.some((e) => e.isYou) && (
+          <>
+            <Text style={{ textAlign: 'center', color: w(0.35), paddingVertical: 2 }}>⋯</Text>
+            <RankRow e={you} scope={scope} />
+          </>
+        )}
+      </View>
+      <Text style={{ textAlign: 'center', marginTop: 20, fontFamily: F.body, fontSize: 11, lineHeight: 16, color: w(0.4) }}>Other players shown are sample entries until online play launches. Your wins are counted from matches on this phone.</Text>
+    </View>
+  );
+}
+
+// ── Profile ────────────────────────────────────────────────────────────────
+function ProfileTab({ account, best }: { account: Account; best: number }) {
+  const [name, setName] = useState(account.name);
+  const [saved, setSaved] = useState(false);
+  const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'logout' | 'delete' | 'dev'>(null);
+  const [photoErr, setPhotoErr] = useState<string | null>(null);
+  const [sound, setSound] = useState(soundEnabled);
+  useEffect(() => onSoundChange(() => setSound(soundEnabled())), []);
+  const country = countryByCode(account.country);
+  const err = nameError(name);
+  const dirty = name.trim() !== account.name;
+
+  const save = () => {
+    if (err || !dirty) return;
+    accounts.update({ name: name.trim() });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1600);
+  };
+  const choose = async (source: 'library' | 'camera') => {
+    setSheet(null);
+    const r = await pickPhoto(source);
+    if (!r) return;
+    if ('error' in r) setPhotoErr(r.error);
+    else { setPhotoErr(null); accounts.update({ photo: r.uri }); }
+  };
+  const wins = (p: Period) => winsFor(account, p);
+  const row = { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: w(0.06) };
+
+  return (
+    <View>
+      <Text style={s.h1}>Profile</Text>
+      <View style={{ alignItems: 'center', marginTop: 18 }}>
+        <Pressable onPress={() => setSheet('photo')} accessibilityLabel="Change photo">
+          <Avatar player={meAvatar(account)} size={104} ring />
+        </Pressable>
+        <Pressable onPress={() => setSheet('photo')} hitSlop={8} style={{ marginTop: 10 }}>
+          <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.primary }}>{account.photo ? 'Change photo' : 'Add photo'}</Text>
+        </Pressable>
+        {photoErr && <Text style={{ marginTop: 6, fontFamily: F.body, fontSize: 13, color: C.coral }}>{photoErr}</Text>}
+      </View>
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 20 }}>
+        {([['Wins this week', wins('week'), C.mint], ['Total wins', account.totalWins, C.white], ['Matches played', account.matchesPlayed, C.white], ['Solo best', best, C.amber]] as const).map(([l, v, col]) => (
+          <Card key={l} style={{ width: '48.5%', paddingHorizontal: 16, paddingVertical: 12 }}>
+            <Text style={s.eyebrow}>{l}</Text>
+            <Text style={[{ fontFamily: F.display, fontSize: 20, color: col }, s.tabular]}>{v}</Text>
+          </Card>
+        ))}
+      </View>
+
+      <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Account</Text>
+      <View style={{ borderRadius: 18, backgroundColor: w(0.04), overflow: 'hidden' }}>
+        <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: w(0.06) }}>
+          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.55) }}>Display name</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+            <TextInput value={name} onChangeText={(t) => setName(cleanName(t))} maxLength={NAME_MAX} autoCorrect={false} keyboardAppearance="dark"
+              returnKeyType="done" onSubmitEditing={save} accessibilityLabel="Display name" style={[inputStyle, { flex: 1, height: 44, borderRadius: 12, fontSize: 16 }]} />
+            <Pressable onPress={save} disabled={!dirty || !!err} style={{ height: 44, paddingHorizontal: 16, borderRadius: 12, justifyContent: 'center', backgroundColor: dirty && !err ? C.primary : w(0.1) }}>
+              <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: dirty && !err ? C.white : w(0.4) }}>{saved ? 'Saved ✓' : 'Save'}</Text>
+            </Pressable>
+          </View>
+          {dirty && err && <Text style={{ marginTop: 4, fontFamily: F.body, fontSize: 12, color: C.coral }}>{err}</Text>}
+        </View>
+        <View style={row}>
+          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>Phone</Text>
+          <Text style={[{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }, s.tabular]}>{maskPhone(account.phone)}</Text>
+        </View>
+        <Pressable onPress={() => setSheet('country')} style={row}>
+          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>Country</Text>
+          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{country.flag} {country.name}  ›</Text>
+        </Pressable>
+        <Pressable onPress={() => setSheet('region')} style={[row, { borderBottomWidth: 0 }]}>
+          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>{country.regionLabel}</Text>
+          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{account.region}  ›</Text>
+        </Pressable>
+      </View>
+
+      <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Settings</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 18, backgroundColor: w(0.04), paddingHorizontal: 16, paddingVertical: 10 }}>
+        <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🔊 Sound effects</Text>
+        <Toggle on={sound} onChange={setSoundEnabled} label="Sound effects" />
+      </View>
+
+      <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Developer</Text>
+      <Pressable onPress={() => setSheet('dev')} style={{ flexDirection: 'row', justifyContent: 'space-between', borderRadius: 18, backgroundColor: w(0.04), paddingHorizontal: 16, paddingVertical: 14 }}>
+        <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🛠 Developer controls</Text>
+        <Text style={{ color: w(0.4) }}>›</Text>
+      </Pressable>
+
+      <View style={{ gap: 10, marginTop: 26 }}>
+        <Button title="Log out" variant="ghost" onPress={() => setSheet('logout')} />
+        <Pressable onPress={() => setSheet('delete')} style={{ height: 48, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontFamily: F.bodyBold, fontSize: 16, color: C.coral }}>Delete account</Text>
+        </Pressable>
+      </View>
+
+      <Sheet open={sheet === 'photo'} onClose={() => setSheet(null)} title="Profile photo">
+        <View style={{ gap: 10 }}>
+          <Button title="Choose from library" onPress={() => choose('library')} />
+          <Button title="Take a photo" variant="ghost" onPress={() => choose('camera')} />
+          {account.photo && <Pressable onPress={() => { accounts.update({ photo: null }); setSheet(null); }} style={{ alignItems: 'center', paddingVertical: 10 }}><Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.coral }}>Remove photo</Text></Pressable>}
+        </View>
+      </Sheet>
+      <OptionSheet open={sheet === 'country'} onClose={() => setSheet(null)} title="Country" value={account.country}
+        options={COUNTRIES.map((x) => ({ value: x.code, label: `${x.flag}  ${x.name}` }))}
+        onPick={(v) => { const c = countryByCode(v); accounts.update({ country: c.code, region: c.regions[0] }); }} />
+      <OptionSheet open={sheet === 'region'} onClose={() => setSheet(null)} title={country.regionLabel} value={account.region}
+        options={country.regions.map((r) => ({ value: r, label: r }))} onPick={(v) => accounts.update({ region: v })} />
+      <Sheet open={sheet === 'logout'} onClose={() => setSheet(null)} title="Log out?">
+        <Text style={s.body}>You can log back in any time with {maskPhone(account.phone)}.</Text>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+          <Button title="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => setSheet(null)} />
+          <Button title="Log out" style={{ flex: 1 }} onPress={() => { setSheet(null); accounts.logOut(); }} />
+        </View>
+      </Sheet>
+      <Sheet open={sheet === 'delete'} onClose={() => setSheet(null)} title="Delete your account?">
+        <Text style={s.body}>{"This permanently removes your profile, photo, wins and stats. This can't be undone."}</Text>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+          <Button title="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => setSheet(null)} />
+          <Button title="Delete account" variant="danger" style={{ flex: 1 }} onPress={() => { setSheet(null); accounts.deleteAccount(); }} />
+        </View>
+      </Sheet>
+      <DevControls open={sheet === 'dev'} onClose={() => setSheet(null)} signedIn />
+    </View>
+  );
+}
+
+export function Home({ s: g, account }: { s: GameState; account: Account }) {
+  // Keep the tab when returning from a game; start on Play after each sign-in.
+  const [tab, setTabState] = useState<Tab>(() => (rememberedFor === account.id ? rememberedTab : 'play'));
+  const setTab = (t: Tab) => { rememberedTab = t; rememberedFor = account.id; setTabState(t); };
   return (
     <Screen padBottom={false}>
-      <ScrollView key={tab} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }}>
-        {tab === 'play' && <PlayTab best={g.personalBest} />}
-        {tab === 'ranks' && <ComingNext title="Ranks" text="World, national and state rankings by weekly wins arrive in the next build, together with accounts." />}
-        {tab === 'profile' && <ComingNext title="Profile" text="Phone sign-in, your photo, display name and stats arrive in the next build." />}
+      <ScrollView key={tab} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }}>
+        <Animated.View entering={FadeIn.duration(200)}>
+          {tab === 'play' && <PlayTab best={g.personalBest} />}
+          {tab === 'ranks' && <RanksTab account={account} />}
+          {tab === 'profile' && <ProfileTab account={account} best={g.personalBest} />}
+        </Animated.View>
       </ScrollView>
-      <TabBar tab={tab} onChange={setTab} />
+      <TabBar tab={tab} onChange={setTab} account={account} />
     </Screen>
   );
 }

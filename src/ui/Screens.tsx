@@ -1,11 +1,12 @@
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming, ZoomIn } from 'react-native-reanimated';
 
 import { engine, HUMAN_ID, TOTAL_ROUNDS, type GameState } from '@/lib/engine';
 import type { Player } from '@/lib/players';
 import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Stat, Tile, useAnimatedNumber, useNow } from './kit';
+import { sfx } from './sound';
 import { C, F, w } from './theme';
 
 function PageScroll({ children, gold = false }: { children: React.ReactNode; gold?: boolean }) {
@@ -44,7 +45,15 @@ export function Lobby({ s: g }: { s: GameState }) {
     pop.set(0);
     pop.set(withSpring(1, { damping: 9 }));
     Haptics.selectionAsync().catch(() => {});
+    sfx.tick();
   }, [count, g.phase, pop]);
+  // Each new player joining the lobby gets a small pop.
+  useEffect(() => {
+    if (filled > 1) {
+      sfx.join();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+  }, [filled]);
   const popStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, pop.value), transform: [{ scale: 2 - pop.value }] }));
   return (
     <Screen>
@@ -71,7 +80,7 @@ export function Lobby({ s: g }: { s: GameState }) {
             return (
               <Card key={p.id} style={{ width: '48%', flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderColor: p.id === HUMAN_ID ? 'rgba(61,139,255,0.5)' : C.cardBorder }}>
                 {joined ? (
-                  <>
+                  <Animated.View entering={ZoomIn.duration(280)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                     <Avatar player={p} size={40} />
                     <View style={{ flex: 1 }}>
                       <Text numberOfLines={1} style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>{p.name}</Text>
@@ -80,7 +89,7 @@ export function Lobby({ s: g }: { s: GameState }) {
                         <Text style={{ fontFamily: F.bodySemi, fontSize: 12, color: C.mint }}>Ready</Text>
                       </View>
                     </View>
-                  </>
+                  </Animated.View>
                 ) : (
                   <>
                     <View style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderStyle: 'dashed', borderColor: w(0.15) }} />
@@ -123,8 +132,13 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
   const youOut = e.playerId === HUMAN_ID && g.awaitingChoice;
 
   useEffect(() => {
-    if (e.playerId === HUMAN_ID) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-    else if (me.status === 'active') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    if (e.playerId === HUMAN_ID) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      sfx.eliminated();
+    } else if (me.status === 'active') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      sfx.survive();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g.matchId, e.round]);
 
@@ -235,7 +249,10 @@ export function FinalResults({ s: g }: { s: GameState }) {
   const placed = g.players.slice().sort((a, b) => (a.placement ?? 9) - (b.placement ?? 9));
   const total = useAnimatedNumber(winner.totalScore, 1200);
   useEffect(() => {
-    if (youWon) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    if (youWon) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      sfx.win();
+    }
   }, [youWon, g.matchId]);
   return (
     <View style={{ flex: 1 }}>

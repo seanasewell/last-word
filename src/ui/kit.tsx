@@ -1,14 +1,19 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { accounts, type AuthState } from '@/lib/account';
 import { engine, HUMAN_ID, type GameState } from '@/lib/engine';
 import { C, F, w } from './theme';
 
 export function useGame(): GameState {
   return useSyncExternalStore(engine.subscribe, engine.getState, engine.getState);
+}
+
+export function useAuth(): AuthState {
+  return useSyncExternalStore(accounts.subscribe, accounts.getState, accounts.getState);
 }
 
 /** Re-renders every `ms` while active; returns Date.now(). */
@@ -110,7 +115,7 @@ export function TileLogo({ size = 36, animate = true }: { size?: number; animate
 }
 
 // ── Avatar ─────────────────────────────────────────────────────────────────
-export interface AvatarLike { glyph: string; hue: number; id?: string; isYou?: boolean }
+export interface AvatarLike { glyph: string; hue: number; id?: string; isYou?: boolean; photo?: string | null }
 
 export function Avatar({ player, size = 36, dim = false, ring = false }: { player: AvatarLike; size?: number; dim?: boolean; ring?: boolean }) {
   const isYou = player.isYou || player.id === HUMAN_ID;
@@ -120,8 +125,12 @@ export function Avatar({ player, size = 36, dim = false, ring = false }: { playe
     : isYou ? [C.primaryTop, C.sky, C.mint] : [`hsl(${h}, 85%, 62%)`, `hsl(${(h + 40) % 360}, 75%, 42%)`];
   const inner = (
     <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-      style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center', opacity: dim ? 0.6 : 1 }}>
-      <Text style={{ fontFamily: F.display, fontSize: size * 0.42, color: C.white, includeFontPadding: false }}>{player.glyph}</Text>
+      style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center', opacity: dim ? 0.6 : 1, overflow: 'hidden' }}>
+      {player.photo ? (
+        <Image source={{ uri: player.photo }} style={{ width: size, height: size, opacity: dim ? 0.5 : 1 }} />
+      ) : (
+        <Text style={{ fontFamily: F.display, fontSize: size * 0.42, color: C.white, includeFontPadding: false }}>{player.glyph}</Text>
+      )}
     </LinearGradient>
   );
   if (!ring) return inner;
@@ -179,3 +188,57 @@ export const s = StyleSheet.create({
   body: { fontFamily: F.body, fontSize: 15, color: w(0.7), lineHeight: 22 },
   tabular: { fontVariant: ['tabular-nums'] },
 });
+
+// ── Sheets & controls ──────────────────────────────────────────────────────
+/** Bottom sheet over a dimmed backdrop. */
+export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title?: string; children: React.ReactNode }) {
+  return (
+    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <Pressable accessibilityLabel="Close" onPress={onClose} style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.55)' }]} />
+        <View style={{ backgroundColor: C.ink850, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, borderColor: w(0.1), paddingHorizontal: 20, paddingTop: 10, paddingBottom: 36, maxHeight: '85%' }}>
+          <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: w(0.2), marginBottom: 16 }} />
+          {title && <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white, marginBottom: 12 }}>{title}</Text>}
+          {children}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+/** A tappable list of options in a sheet (stands in for a web <select>). */
+export function OptionSheet<T extends string>({ open, onClose, title, options, value, onPick }: { open: boolean; onClose: () => void; title: string; options: { value: T; label: string }[]; value?: T; onPick: (v: T) => void }) {
+  return (
+    <Sheet open={open} onClose={onClose} title={title}>
+      <ScrollView style={{ maxHeight: 460 }}>
+        {options.map((o) => (
+          <Pressable key={o.value} onPress={() => { onPick(o.value); onClose(); }}
+            style={({ pressed }) => ({ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12, backgroundColor: pressed ? w(0.06) : 'transparent' })}>
+            <Text style={{ fontFamily: o.value === value ? F.bodyBold : F.body, fontSize: 16, color: C.white }}>{o.label}</Text>
+            {o.value === value && <Text style={{ fontFamily: F.bodyBold, color: C.primary }}>✓</Text>}
+          </Pressable>
+        ))}
+      </ScrollView>
+    </Sheet>
+  );
+}
+
+/** A row that looks like a form field and opens a picker. */
+export function SelectRow({ label, value, placeholder, onPress }: { label?: string; value?: string; placeholder: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label ?? placeholder}
+      style={{ height: 52, borderRadius: 16, borderWidth: 1, borderColor: w(0.1), backgroundColor: 'rgba(4,10,22,0.7)', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Text style={{ fontFamily: F.bodySemi, fontSize: 16, color: value ? C.white : w(0.4) }}>{value || placeholder}</Text>
+      <Text style={{ color: w(0.45) }}>▾</Text>
+    </Pressable>
+  );
+}
+
+export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  return <Switch value={on} onValueChange={onChange} accessibilityLabel={label} trackColor={{ true: C.mint, false: w(0.2) }} />;
+}
+
+export const inputStyle: TextStyle = {
+  height: 56, borderRadius: 18, borderWidth: 1, borderColor: w(0.1), backgroundColor: 'rgba(4,10,22,0.7)',
+  paddingHorizontal: 16, color: C.white, fontFamily: F.bodySemi, fontSize: 18,
+};

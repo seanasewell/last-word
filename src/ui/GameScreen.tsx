@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { engine, HUMAN_ID, TOTAL_ROUNDS, type GameState } from '@/lib/engine';
 import { rankByRound, type Player, type WordEntry } from '@/lib/players';
 import { REJECTION_TEXT } from '@/lib/words';
+import { sfx } from './sound';
 import { Avatar, Card, ordinal, s, Screen, Tile, useAnimatedNumber, useNow } from './kit';
 import { C, F, w } from './theme';
 
@@ -28,6 +29,13 @@ function Timer({ endsAt, total, final }: { endsAt: number; total: number; final:
     else { cancelAnimation(pulse); pulse.set(1); }
   }, [urgent, pulse]);
   const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
+  // Last five seconds: a tick and a tap each second.
+  useEffect(() => {
+    if (secs > 0 && secs <= 5) {
+      sfx.tick();
+      Haptics.selectionAsync().catch(() => {});
+    }
+  }, [secs]);
   const color = urgent ? C.coral : final ? C.amber : C.mint;
   return (
     <View style={{ alignItems: 'center', gap: 6 }}>
@@ -135,9 +143,11 @@ function WordInput({ final }: { final: boolean }) {
     setValue(''); // always clear; rejected words flash red and fade
     if (accepted.length) {
       haptic.ok();
+      sfx.word(Math.max(...accepted.map((a) => a.word.length)));
       setFloaters((f) => [...f.slice(-3), { id, text: `+${gained}` }]);
     } else {
       haptic.bad();
+      sfx.wrong();
     }
     if (!rejected.length) {
       setMsg({ tone: 'ok', id, text: accepted.length === 1 ? `${accepted[0].word.toUpperCase()}  +${gained}` : `${accepted.length} words  +${gained}` });

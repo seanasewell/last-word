@@ -1,21 +1,52 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
+import { accounts } from '@/lib/account';
+import { engine } from '@/lib/engine';
+import { AuthFlow, Onboarding } from './Auth';
 import { GameScreen } from './GameScreen';
 import { Home } from './Home';
-import { useGame } from './kit';
+import { useAuth, useGame } from './kit';
 import { EliminationScreen, FinalResults, Lobby, SoloResults } from './Screens';
 
-/** Screen flow for the whole game, driven by the engine's phase. */
+/** Screen flow for the whole app: sign-in, onboarding, then the game's phases. */
 export function LastWordApp() {
+  const auth = useAuth();
   const g = useGame();
-  switch (g.phase) {
-    case 'menu': return <Home s={g} />;
-    case 'sp-playing':
-    case 'round': return <GameScreen s={g} />;
-    case 'sp-results': return <SoloResults s={g} />;
-    case 'lobby':
-    case 'prematch': return <Lobby s={g} />;
-    case 'elimination': return <EliminationScreen s={g} />;
-    case 'final': return <FinalResults s={g} />;
+  const a = auth.account;
+
+  // Count finished elimination matches (and wins) toward the signed-in account.
+  useEffect(() => engine.onMatchEnd((won) => accounts.recordMatch(won)), []);
+
+  // Keep the game's player identity in step with the account.
+  const id = a?.id;
+  const name = a?.name;
+  const photo = a?.photo ?? null;
+  useEffect(() => {
+    if (id) engine.setProfile(id, name || 'You', photo);
+    else engine.goMenu();
+  }, [id, name, photo]);
+
+  let key: string;
+  let screen: React.ReactNode;
+  if (!a) { key = 'auth'; screen = <AuthFlow />; }
+  else if (auth.onboarding) { key = 'onboarding'; screen = <Onboarding />; }
+  else {
+    switch (g.phase) {
+      case 'menu': key = 'home'; screen = <Home s={g} account={a} />; break;
+      case 'sp-playing':
+      case 'round': key = `game-${g.matchId}-${g.round}`; screen = <GameScreen s={g} />; break;
+      case 'sp-results': key = 'sp-results'; screen = <SoloResults s={g} />; break;
+      case 'lobby':
+      case 'prematch': key = `lobby-${g.matchId}`; screen = <Lobby s={g} />; break;
+      case 'elimination': key = `elim-${g.matchId}-${g.round}`; screen = <EliminationScreen s={g} />; break;
+      case 'final': key = `final-${g.matchId}`; screen = <FinalResults s={g} />; break;
+    }
   }
+  // A quick cross-fade whenever the screen changes.
+  return (
+    <Animated.View key={key} entering={FadeIn.duration(220)} style={{ flex: 1 }}>
+      {screen}
+    </Animated.View>
+  );
 }

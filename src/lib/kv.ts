@@ -27,6 +27,9 @@ export const kv = {
     cache.set(key, value);
     AsyncStorage.setItem(key, value).catch(() => {});
   },
+  keys(): string[] {
+    return [...cache.keys()];
+  },
   remove(key: string) {
     cache.delete(key);
     AsyncStorage.removeItem(key).catch(() => {});
