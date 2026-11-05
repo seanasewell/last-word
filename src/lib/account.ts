@@ -191,7 +191,10 @@ class AccountStore {
     };
     this.set({ account: next });
     const { error } = await supabase.from('profiles').update(row).eq('id', a.id);
-    if (error) { this.set({ account: a }); return "Couldn't save that change. Try again."; }
+    if (error) {
+      this.set({ account: a });
+      return error.message.includes('name-not-allowed') ? "That name isn't allowed. Try another." : "Couldn't save that change. Try again.";
+    }
     return null;
   }
 

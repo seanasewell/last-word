@@ -1,11 +1,12 @@
 import * as Haptics from 'expo-haptics';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming, ZoomIn } from 'react-native-reanimated';
 
 import { engine, HUMAN_ID, TOTAL_ROUNDS, type GameState } from '@/lib/engine';
 import type { Player } from '@/lib/players';
 import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Stat, Tile, useAnimatedNumber, useNow, BotBadge, isBot } from './kit';
+import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { sfx } from './sound';
 import { C, F, w } from './theme';
 
@@ -17,8 +18,17 @@ function PageScroll({ children, gold = false }: { children: React.ReactNode; gol
   );
 }
 
-const Row = ({ p, right, sub, highlight, out, rank }: { p: Player; right: React.ReactNode; sub?: string; highlight?: 'you' | 'gold'; out?: boolean; rank?: string }) => (
-  <View style={{
+/** Tap a real player (not a bot, not you) in an online match to report or block them. */
+function usePlayerActions() {
+  const [acting, setActing] = useState<PlayerRef | null>(null);
+  const actOn = (p: Player) => (p.controller === 'remote'
+    ? () => setActing({ name: p.name, glyph: p.glyph, hue: p.hue, photo: p.photo, target: { matchPlayerId: p.id } })
+    : undefined);
+  return { actOn, sheet: <PlayerActions player={acting} onClose={() => setActing(null)} /> };
+}
+
+const Row = ({ p, right, sub, highlight, out, rank, onPress }: { p: Player; right: React.ReactNode; sub?: string; highlight?: 'you' | 'gold'; out?: boolean; rank?: string; onPress?: () => void }) => (
+  <Pressable onPress={onPress} disabled={!onPress} accessibilityHint={onPress ? 'Report or block this player' : undefined} style={{
     flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14,
     backgroundColor: out ? 'rgba(255,93,115,0.08)' : highlight === 'gold' ? 'rgba(255,181,71,0.12)' : highlight === 'you' ? 'rgba(61,139,255,0.14)' : w(0.03),
     borderWidth: highlight === 'gold' ? 1 : 0, borderColor: 'rgba(255,181,71,0.3)',
@@ -31,7 +41,7 @@ const Row = ({ p, right, sub, highlight, out, rank }: { p: Player; right: React.
     </View>
     {sub && <Text style={{ fontFamily: F.body, fontSize: 11, color: w(0.6) }}>{sub}</Text>}
     {right}
-  </View>
+  </Pressable>
 );
 
 const num = (n: number | string, color = C.white) => <Text style={[{ fontFamily: F.display, fontSize: 16, color, minWidth: 44, textAlign: 'right' }, s.tabular]}>{n}</Text>;
@@ -128,6 +138,7 @@ export function Lobby({ s: g }: { s: GameState }) {
 
 // ── Between rounds ─────────────────────────────────────────────────────────
 export function EliminationScreen({ s: g }: { s: GameState }) {
+  const { actOn, sheet } = usePlayerActions();
   const e = g.lastElimination!;
   const byId = new Map(g.players.map((p) => [p.id, p]));
   const out = byId.get(e.playerId)!;
@@ -169,12 +180,13 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
         </View>
         <Text style={[s.eyebrow, { marginTop: 22, marginBottom: 8 }]}>Still in · {remaining.length} players</Text>
         <View style={{ gap: 6 }}>
-          {remaining.map((p) => <Row key={p.id} p={p} right={<Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65) }}>{p.totalScore} total</Text>} />)}
+          {remaining.map((p) => <Row key={p.id} p={p} onPress={actOn(p)} right={<Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65) }}>{p.totalScore} total</Text>} />)}
         </View>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 'auto', paddingTop: 24 }}>
           <Button title="Main menu" variant="ghost" style={{ flex: 1 }} onPress={() => engine.goMenu()} />
           <Button title="Spectate" style={{ flex: 1 }} onPress={() => engine.spectate()} />
         </View>
+        {sheet}
       </PageScroll>
     );
   }
@@ -202,9 +214,10 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
       <View style={{ gap: 6, marginTop: 16 }}>
         {e.standings.map((row, i) => {
           const p = byId.get(row.id)!;
-          return <Row key={row.id} p={p} rank={String(i + 1)} out={row.id === e.playerId} highlight={p.id === HUMAN_ID ? 'you' : undefined} right={num(row.roundScore)} />;
+          return <Row key={row.id} p={p} rank={String(i + 1)} out={row.id === e.playerId} highlight={p.id === HUMAN_ID ? 'you' : undefined} right={num(row.roundScore)} onPress={actOn(p)} />;
         })}
       </View>
+      {sheet}
     </PageScroll>
   );
 }
@@ -250,6 +263,7 @@ function Confetti({ big }: { big: boolean }) {
 
 // ── Winner + final standings ───────────────────────────────────────────────
 export function FinalResults({ s: g }: { s: GameState }) {
+  const { actOn, sheet } = usePlayerActions();
   const byId = new Map(g.players.map((p) => [p.id, p]));
   const winner = byId.get(g.winnerId!)!;
   const me = byId.get(HUMAN_ID)!;
@@ -295,13 +309,14 @@ export function FinalResults({ s: g }: { s: GameState }) {
         <View style={{ gap: 6 }}>
           {placed.map((p) => (
             <Row key={p.id} p={p} rank={ordinal(p.placement ?? 0)} highlight={p.id === winner.id ? 'gold' : p.id === HUMAN_ID ? 'you' : undefined}
-              sub={p.placement === 1 ? 'Winner' : `Out round ${p.eliminatedInRound}`} right={num(p.totalScore)} />
+              sub={p.placement === 1 ? 'Winner' : `Out round ${p.eliminatedInRound}`} right={num(p.totalScore)} onPress={actOn(p)} />
           ))}
         </View>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 'auto', paddingTop: 24 }}>
           <Button title="Main menu" variant="ghost" style={{ flex: 1 }} onPress={() => engine.goMenu()} />
           <Button title="Play again" variant="gold" style={{ flex: 1 }} onPress={() => engine.startMatch()} />
         </View>
+        {sheet}
       </PageScroll>
       <Confetti big={youWon} />
     </View>

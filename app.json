@@ -1,22 +1,35 @@
 {
   "expo": {
-    "name": "last-word",
+    "name": "Last Word",
     "slug": "last-word",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "lastword",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#081428",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.studiosewell.lastword",
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.studiosewell.lastword",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0D1E3D",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -28,16 +41,16 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#081428",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 220
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Last word uses your photos so you can choose a profile picture.",
-          "cameraPermission": "Last word uses the camera so you can take a profile picture."
+          "photosPermission": "Last Word uses your photos so you can choose a profile picture.",
+          "cameraPermission": "Last Word uses the camera so you can take a profile picture."
         }
       ],
       [

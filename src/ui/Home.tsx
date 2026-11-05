@@ -1,16 +1,19 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { accounts, weekRange, winsFor, type Account, type Period } from '@/lib/account';
 import { engine, type GameState } from '@/lib/engine';
+import { myBlocks, unblockPlayer, type BlockedPlayer } from '@/lib/moderation';
+import { PRIVACY_URL, SHOW_DEV_TOOLS, SUPPORT_URL } from '@/lib/release';
 import { fetchLeaderboard, type Leaderboard, type RankEntry, type Scope } from '@/lib/ranks';
 import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { scoreWord } from '@/lib/words';
 import { cleanName, DevControls, NAME_MAX, nameError } from './Auth';
 import { Avatar, Button, Card, FadeUp, OptionSheet, ordinal, s, Screen, Sheet, TextField, TileLogo, Toggle, useNow } from './kit';
 import { pickPhoto } from './photo';
+import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { onSoundChange, setSoundEnabled, soundEnabled } from './sound';
 import { C, F, w } from './theme';
 
@@ -168,12 +171,13 @@ function Segmented<T extends string>({ options, value, onChange, small = false }
   );
 }
 
-function RankRow({ e, scope }: { e: RankEntry; scope: Scope }) {
+function RankRow({ e, scope, onPress }: { e: RankEntry; scope: Scope; onPress?: () => void }) {
   const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : null;
   const where = scope === 'world' ? `${e.country.flag} ${e.country.name}` : scope === 'national' ? e.region : `${e.country.flag} ${e.region}`;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16,
-      backgroundColor: e.isYou ? 'rgba(61,139,255,0.15)' : e.rank <= 3 ? 'rgba(255,181,71,0.06)' : w(0.03), borderWidth: e.isYou ? 1 : 0, borderColor: 'rgba(61,139,255,0.4)' }}>
+    <Pressable onPress={onPress} disabled={!onPress} accessibilityHint={onPress ? 'Report or block this player' : undefined}
+      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16,
+      backgroundColor: pressed ? 'rgba(61,139,255,0.12)' : e.isYou ? 'rgba(61,139,255,0.15)' : e.rank <= 3 ? 'rgba(255,181,71,0.06)' : w(0.03), borderWidth: e.isYou ? 1 : 0, borderColor: 'rgba(61,139,255,0.4)' })}>
       <View style={{ width: 30, alignItems: 'center' }}>
         {medal ? <Text style={{ fontSize: 20 }}>{medal}</Text> : <Text style={[{ fontFamily: F.displayBold, fontSize: 14, color: w(0.7) }, s.tabular]}>{e.rank}</Text>}
       </View>
@@ -186,7 +190,7 @@ function RankRow({ e, scope }: { e: RankEntry; scope: Scope }) {
         <Text style={[{ fontFamily: F.display, fontSize: 18, color: C.white }, s.tabular]}>{e.wins}</Text>
         <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.6) }}>{e.wins === 1 ? 'win' : 'wins'}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -198,6 +202,9 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
   const country = countryByCode(account.country);
   const now = useNow(true, 30_000);
   const key = `${scope}-${period}`;
+  const [acting, setActing] = useState<PlayerRef | null>(null);
+  const [blocks, setBlocks] = useState(0);
+  const actOn = (e: RankEntry) => (e.isYou ? undefined : () => setActing({ name: e.name, glyph: e.glyph, hue: e.hue, photo: e.photo, target: { userId: e.id } }));
 
   // Load the board for the current scope and period (and on pull-to-refresh).
   const myWinsLocal = winsFor(account, period);
@@ -207,7 +214,7 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
       .then((data) => { if (live) { setBoard({ key: `${scope}-${period}`, data }); setError(null); } })
       .catch(() => { if (live) setError("Couldn't load rankings. Pull down to try again."); });
     return () => { live = false; };
-  }, [scope, period, refreshKey, myWinsLocal]);
+  }, [scope, period, refreshKey, myWinsLocal, blocks]);
 
   const scopes: { id: Scope; label: string }[] = [
     { id: 'world', label: '🌍 World' },
@@ -250,7 +257,7 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
       )}
       {data && data.entries.length > 0 && (
         <View style={{ gap: 6, marginTop: 8 }}>
-          {data.entries.map((e) => <RankRow key={e.id} e={e} scope={scope} />)}
+          {data.entries.map((e) => <RankRow key={e.id} e={e} scope={scope} onPress={actOn(e)} />)}
           {you && you.rank > 50 && (
             <>
               <Text style={{ textAlign: 'center', color: w(0.5), paddingVertical: 2 }}>⋯</Text>
@@ -262,6 +269,7 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
           </Text>
         </View>
       )}
+      <PlayerActions player={acting} onClose={() => setActing(null)} onBlocked={() => setBlocks((n) => n + 1)} />
     </View>
   );
 }
@@ -270,7 +278,7 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
 function ProfileTab({ account, best }: { account: Account; best: number }) {
   const [name, setName] = useState(account.name);
   const [saved, setSaved] = useState(false);
-  const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'delete' | 'dev'>(null);
+  const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'delete' | 'dev' | 'blocked'>(null);
   const [photoErr, setPhotoErr] = useState<string | null>(null);
   const [sound, setSound] = useState(soundEnabled);
   useEffect(() => onSoundChange(() => setSound(soundEnabled())), []);
@@ -351,16 +359,34 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
       </View>
 
       <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Settings</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 16, paddingVertical: 10 }}>
-        <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🔊 Sound effects</Text>
-        <Toggle on={sound} onChange={setSoundEnabled} label="Sound effects" />
+      <View style={{ borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' }}>
+        <View style={[row, { paddingVertical: 10 }]}>
+          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🔊 Sound effects</Text>
+          <Toggle on={sound} onChange={setSoundEnabled} label="Sound effects" />
+        </View>
+        <Pressable onPress={() => setSheet('blocked')} style={row}>
+          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🚫 Blocked players</Text>
+          <Text style={{ color: w(0.55) }}>›</Text>
+        </Pressable>
+        <Pressable onPress={() => { void Linking.openURL(SUPPORT_URL); }} style={row}>
+          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>💬 Help and support</Text>
+          <Text style={{ color: w(0.55) }}>↗</Text>
+        </Pressable>
+        <Pressable onPress={() => { void Linking.openURL(PRIVACY_URL); }} style={[row, { borderBottomWidth: 0 }]}>
+          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🔒 Privacy policy</Text>
+          <Text style={{ color: w(0.55) }}>↗</Text>
+        </Pressable>
       </View>
 
-      <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Developer</Text>
-      <Pressable onPress={() => setSheet('dev')} style={{ flexDirection: 'row', justifyContent: 'space-between', borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 16, paddingVertical: 14 }}>
-        <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🛠 Developer controls</Text>
-        <Text style={{ color: w(0.55) }}>›</Text>
-      </Pressable>
+      {SHOW_DEV_TOOLS && (
+        <>
+          <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Developer</Text>
+          <Pressable onPress={() => setSheet('dev')} style={{ flexDirection: 'row', justifyContent: 'space-between', borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 16, paddingVertical: 14 }}>
+            <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🛠 Developer controls</Text>
+            <Text style={{ color: w(0.55) }}>›</Text>
+          </Pressable>
+        </>
+      )}
 
       <View style={{ gap: 10, marginTop: 26 }}>
         <Pressable onPress={() => setSheet('delete')} style={{ height: 48, alignItems: 'center', justifyContent: 'center' }}>
@@ -388,8 +414,41 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
           <Button title={deleting ? 'Deleting…' : 'Delete account'} variant="danger" disabled={deleting} style={{ flex: 1 }} onPress={remove} />
         </View>
       </Sheet>
-      <DevControls open={sheet === 'dev'} onClose={() => setSheet(null)} signedIn />
+      {SHOW_DEV_TOOLS && <DevControls open={sheet === 'dev'} onClose={() => setSheet(null)} signedIn />}
+      <BlockedPlayers open={sheet === 'blocked'} onClose={() => setSheet(null)} />
     </View>
+  );
+}
+
+// ── Blocked players ────────────────────────────────────────────────────────
+function BlockedPlayers({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [list, setList] = useState<BlockedPlayer[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    myBlocks().then((l) => { if (live) { setList(l); setErr(null); } }).catch(() => { if (live) setErr("Couldn't load your blocked players."); });
+    return () => { live = false; };
+  }, [open]);
+  const unblock = async (id: string) => {
+    const e = await unblockPlayer(id);
+    if (e) setErr(e); else setList((l) => (l ?? []).filter((x) => x.userId !== id));
+  };
+  return (
+    <Sheet open={open} onClose={onClose} title="Blocked players">
+      {err && <Text style={{ fontFamily: F.body, fontSize: 13, color: C.coral, marginBottom: 8 }}>{err}</Text>}
+      {!list && !err && <ActivityIndicator color={C.primary} style={{ marginVertical: 16 }} />}
+      {list && list.length === 0 && <Text style={s.body}>{"You haven't blocked anyone. To block a player, tap them on the ranks or in a match's results."}</Text>}
+      <ScrollView style={{ maxHeight: 380 }}>
+        {(list ?? []).map((b) => (
+          <View key={b.userId} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
+            <Avatar player={{ glyph: b.name[0]?.toUpperCase() ?? '?', hue: 210, photo: b.photo }} size={36} />
+            <Text numberOfLines={1} style={{ flex: 1, fontFamily: F.bodyBold, fontSize: 15, color: C.white }}>{b.name}</Text>
+            <Pressable onPress={() => void unblock(b.userId)} hitSlop={8}><Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.primary }}>Unblock</Text></Pressable>
+          </View>
+        ))}
+      </ScrollView>
+    </Sheet>
   );
 }
 

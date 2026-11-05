@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { accounts } from '@/lib/account';
+import { nameAllowed } from '@/lib/nameFilter';
+import { SHOW_DEV_TOOLS } from '@/lib/release';
 import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { AnimatedTileLogo } from './AnimatedLogo';
 import { Captcha, type CaptchaHandle } from './Captcha';
@@ -127,12 +129,14 @@ export function AuthFlow() {
           <Captcha ref={captcha} onToken={onToken} onError={onCaptchaError} />
           {error && <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 14, color: C.coral }}>{error}</Text>}
           <Button title={starting || waiting ? 'Starting…' : 'Play'} disabled={starting || waiting} onPress={play} />
+{SHOW_DEV_TOOLS && (
           <Pressable onPress={() => setDev(true)} hitSlop={10} style={{ alignSelf: 'center', paddingTop: 10 }}>
             <Text style={{ fontFamily: F.bodySemi, fontSize: 12, color: w(0.6) }}>🛠 Developer controls</Text>
           </Pressable>
+          )}
         </View>
       </View>
-      <DevControls open={dev} onClose={() => setDev(false)} signedIn={false} captchaToken={token} onTokenUsed={() => captcha.current?.reset()} />
+      {SHOW_DEV_TOOLS && <DevControls open={dev} onClose={() => setDev(false)} signedIn={false} captchaToken={token} onTokenUsed={() => captcha.current?.reset()} />}
     </Screen>
   );
 }
@@ -140,7 +144,7 @@ export function AuthFlow() {
 // ── Onboarding ─────────────────────────────────────────────────────────────
 const NAME_MAX = 14;
 export const cleanName = (n: string) => n.replace(/[^\p{L}\p{N} _.'-]/gu, '').replace(/\s+/g, ' ').slice(0, NAME_MAX);
-export const nameError = (n: string) => (n.trim().length < 2 ? 'Use at least 2 characters.' : null);
+export const nameError = (n: string) => (n.trim().length < 2 ? 'Use at least 2 characters.' : !nameAllowed(n) ? "That name isn't allowed. Try another." : null);
 export { NAME_MAX };
 
 export function Onboarding() {
@@ -187,7 +191,10 @@ export function Onboarding() {
         <TextField autoFocus value={name} onChangeText={(t) => setName(cleanName(t))} maxLength={NAME_MAX} placeholder="Display name"
           autoCorrect={false} keyboardAppearance="dark" returnKeyType="next" accessibilityLabel="Display name"
           onSubmitEditing={() => { if (!nErr) { accounts.update({ name: name.trim() }); setStep(1); } }} style={{ marginTop: 24 }} />
-        <Text style={{ alignSelf: 'flex-end', marginTop: 6, fontFamily: F.body, fontSize: 12, color: w(0.6) }}>{name.length}/{NAME_MAX}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+          <Text style={{ fontFamily: F.body, fontSize: 12, color: C.coral }}>{name.trim().length >= 2 && nErr ? nErr : ''}</Text>
+          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.6) }}>{name.length}/{NAME_MAX}</Text>
+        </View>
       </Step>
     );
   }
