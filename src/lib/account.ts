@@ -24,14 +24,6 @@ export interface Account {
   soloBest: number;
 }
 
-export interface MatchRecord {
-  won: boolean;
-  placement: number;
-  totalScore: number;
-  wordsFound: number;
-  longestWord: string;
-}
-
 interface PendingCode { phone: string; country: string; sentAt: number }
 
 export interface AuthState {
@@ -232,23 +224,9 @@ class AccountStore {
     return null;
   }
 
-  /** Save a finished elimination match. */
-  async recordMatch(m: MatchRecord) {
-    const a = this.state.account;
-    if (!a) return;
-    // Update the on-screen totals immediately.
-    const now = new Date();
-    const next: Account = { ...a, matchesPlayed: a.matchesPlayed + 1 };
-    if (m.won) {
-      next.totalWins = a.totalWins + 1;
-      next.winsByDay = { ...a.winsByDay, [dayKey(now)]: (a.winsByDay[dayKey(now)] ?? 0) + 1 };
-      next.winsByWeek = { ...a.winsByWeek, [weekKey(now)]: (a.winsByWeek[weekKey(now)] ?? 0) + 1 };
-    }
-    this.set({ account: next });
-    await supabase.from('match_results').insert({
-      user_id: a.id, won: m.won, placement: m.placement, total_score: m.totalScore,
-      words_found: m.wordsFound, longest_word: m.longestWord || null,
-    });
+  /** Match results are written by the server; re-read them after a match. */
+  async afterMatch() {
+    await this.refresh().catch(() => {});
   }
 
   /** Save a new solo personal best to the profile. */
@@ -278,10 +256,6 @@ class AccountStore {
   async devRestartOnboarding() {
     await this.update({ name: '', region: '', photo: null }).catch(() => null);
     this.set({ onboarding: true });
-  }
-  /** Records a real test win for this account (it shows up in stats and ranks). */
-  async devAddWin() {
-    await this.recordMatch({ won: true, placement: 1, totalScore: 0, wordsFound: 0, longestWord: '' });
   }
   /** Signs out and clears this phone's local data (server data is untouched). */
   async devResetAll() {

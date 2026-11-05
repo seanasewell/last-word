@@ -15,8 +15,8 @@ export function LastWordApp() {
   const g = useGame();
   const a = auth.account;
 
-  // Save each finished elimination match to the signed-in account.
-  useEffect(() => engine.onMatchEnd((r) => { void accounts.recordMatch(r); }), []);
+  // The server records each match; refresh wins and stats once it's decided for this player.
+  useEffect(() => engine.onMatchEnd(() => { void accounts.afterMatch(); }), []);
 
   // Save a new solo personal best to the profile.
   useEffect(() => {

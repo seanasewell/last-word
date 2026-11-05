@@ -4,18 +4,24 @@
 //
 // The UI only reads state and calls intents (submit, startMatch, …). All
 // submissions — human or bot — go through `submit()`, which validates with
-// the word engine. In a real multiplayer build this class is what moves to
-// the server: clients would send `submit` intents over a socket and receive
-// state snapshots back; bot controllers would simply be replaced by remote
-// ones. This prototype runs everything locally — there is no network play.
+// the word engine.
+//
+// Elimination matches are played online when signed in: the Supabase server
+// is the referee (it picks sources, keeps time, checks and scores words, plays
+// the bots, eliminates and records results). The app checks in about once a
+// second, maps the server's snapshot onto GameState, and checks words locally
+// first only so feedback is instant — the server's answer is final. Without a
+// session (or if the server can't be reached) the match runs locally and is
+// not counted.
 import { nextSource } from './sources';
+import { supabase } from './supabase';
 import { kv } from './kv';
 import {
   bannedWords, findAllWords, letterCounts, sourceLetters, validateSubmission,
   type Counts, type Validation,
 } from './words';
 import {
-  BOT_ROSTER, makePlayer, rankByRound, resetForRound, type Player,
+  BOT_ROSTER, makePlayer, rankByRound, resetForRound, type Player, type WordEntry,
 } from './players';
 import { planBotRound, type PlannedSubmission } from './bots';
 
@@ -72,9 +78,53 @@ export interface GameState {
   missedLongest: string[];
 }
 
+// ── Server snapshot (see mm_tick) ──
+interface SnapPlayer {
+  id: string; name: string; photo_url: string | null; hue: number; is_bot: boolean; seat: number;
+  status: 'active' | 'eliminated'; placement: number | null; eliminated_round: number | null;
+  round_score: number; total_score: number; words_found: number; longest_word: string;
+  reached_at: string | null; tiebreak: number; is_me: boolean;
+}
+interface SnapMatch {
+  id: string; status: 'lobby' | 'prematch' | 'round' | 'between' | 'final'; round: number;
+  source: string | null; possible_words: number;
+  prematch_ends_at: string | null; round_started_at: string | null; round_ends_at: string | null; next_round_at: string | null;
+  last_elimination: { round: number; player_id: string; round_score: number; remaining: number;
+    standings: { id: string; round_score: number; total_score: number }[] } | null;
+  winner_id: string | null;
+}
+interface Snapshot { server_now: string; match: SnapMatch; players: SnapPlayer[]; my_words: { word: string; points: number; at: string }[] }
+type SubmitReply = { raw: string; ok: true; word: string; points: number } | { raw: string; ok: false; word: string; reason: string };
+
+interface Online {
+  matchId: string;
+  myPid: string;
+  /** server clock − local clock, in ms. */
+  offset: number;
+  bestRtt: number;
+  snap: Snapshot | null;
+  round: number;
+  /** My accepted words the latest snapshot doesn't include yet. */
+  extras: Map<string, WordEntry>;
+  queue: string[];
+  flushScheduled: boolean;
+  choice: 'none' | 'spectate';
+  done: boolean;
+}
+
+/** Postgres timestamps carry microseconds; trim to milliseconds before parsing. */
+const parseTs = (t: string | null) => (t ? Date.parse(t.replace(/(\.\d{3})\d+/, '$1')) : 0);
+
 const storage = {
   get: (k: string) => kv.get(k),
   set: (k: string, v: string) => kv.set(k, v),
+};
+
+/** Lobby seats not yet taken show as "Waiting…". */
+const padSlots = (players: Player[]) => {
+  const out = players.slice(0, 6);
+  for (let i = out.length; i < 6; i++) out.push(makePlayer(`slot${i}`, '', '', 0, 'remote'));
+  return out;
 };
 
 const newId = () => Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -94,6 +144,7 @@ export class GameEngine {
   private photo: string | null = null;
   private matchListeners = new Set<(r: MatchResult) => void>();
   private matchCounted = false;
+  private online: Online | null = null;
 
   /** Called once per finished elimination match for the human player. */
   onMatchEnd(fn: (r: MatchResult) => void) { this.matchListeners.add(fn); return () => { this.matchListeners.delete(fn); }; }
@@ -148,11 +199,15 @@ export class GameEngine {
   // ── intents ──
 
   goMenu() {
+    const o = this.online;
+    if (o && !o.done && o.snap?.match.status === 'lobby') void supabase.rpc('mm_leave', { p_match: o.matchId });
+    this.online = null;
     this.clearTimers();
     this.set({ phase: 'menu', mode: null, accepting: false, spectating: false, awaitingChoice: false });
   }
 
   startSingle() {
+    this.online = null;
     this.clearTimers();
     const human = this.makeHuman();
     this.set({
@@ -163,7 +218,22 @@ export class GameEngine {
     this.beginRound();
   }
 
+  /** Find an online match; falls back to a local one when that isn't possible. */
   startMatch() {
+    this.online = null;
+    this.clearTimers();
+    this.matchCounted = false;
+    const human = this.makeHuman();
+    this.set({
+      mode: 'multi', matchId: newId(), phase: 'lobby', round: 0, source: '', usedSources: [],
+      players: padSlots([human]), lobbyFilled: 1, winnerId: null, lastElimination: null,
+      spectating: false, awaitingChoice: false, accepting: false,
+    });
+    void this.joinOnline(this.token);
+  }
+
+  private startLocalMatch() {
+    this.online = null;
     this.clearTimers();
     this.matchCounted = false;
     const human = this.makeHuman();
@@ -191,12 +261,20 @@ export class GameEngine {
 
   spectate() {
     if (!this.state.awaitingChoice) return;
+    const o = this.online;
+    if (o) {
+      o.choice = 'spectate';
+      this.set({ spectating: true, awaitingChoice: false });
+      this.render(o);
+      return;
+    }
     this.set({ spectating: true, awaitingChoice: false, nextRoundAt: Date.now() + 4000 });
     this.after(4000, () => this.beginRound());
   }
 
   /** The single entry point for every submission, human or bot. */
   submit(playerId: string, raw: string): Validation {
+    if (this.online) return this.submitOnline(this.online, raw);
     const s = this.state;
     const idx = s.players.findIndex((p) => p.id === playerId);
     const player = s.players[idx];
@@ -340,6 +418,186 @@ export class GameEngine {
     }
     this.set({ accepting: false, players, lastElimination: elimination, phase: 'elimination', awaitingChoice: false, nextRoundAt: Date.now() + BETWEEN_ROUNDS });
     this.after(BETWEEN_ROUNDS, () => this.beginRound());
+  }
+
+  // ── online play ──────────────────────────────────────────────────────────
+
+  private async joinOnline(t: number) {
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      if (t !== this.token) return;
+      if (!sess.session) { this.startLocalMatch(); return; }
+      const { data, error } = await supabase.rpc('mm_join');
+      if (t !== this.token) {
+        // Left while joining: give the seat back.
+        if (data) void supabase.rpc('mm_leave', { p_match: data });
+        return;
+      }
+      if (error || !data) { this.startLocalMatch(); return; }
+      this.online = {
+        matchId: data as string, myPid: '', offset: 0, bestRtt: Infinity, snap: null, round: 0,
+        extras: new Map(), queue: [], flushScheduled: false, choice: 'none', done: false,
+      };
+      void this.poll(t, this.online);
+    } catch {
+      if (t === this.token) this.startLocalMatch();
+    }
+  }
+
+  private async poll(t: number, o: Online) {
+    if (t !== this.token || this.online !== o || o.done) return;
+    const t0 = Date.now();
+    let delay = 2000;
+    try {
+      const { data, error } = await supabase.rpc('mm_tick', { p_match: o.matchId });
+      const t1 = Date.now();
+      if (t !== this.token || this.online !== o) return;
+      if (!error && data) {
+        const snap = data as Snapshot;
+        // Estimate the server clock from the quickest round trips.
+        const rtt = t1 - t0;
+        if (rtt <= o.bestRtt + 40) o.offset = parseTs(snap.server_now) - (t0 + t1) / 2;
+        o.bestRtt = Math.min(o.bestRtt * 1.05, rtt);
+        o.snap = snap;
+        delay = this.render(o);
+      }
+    } catch {
+      // Network hiccup: try again shortly.
+    }
+    if (!o.done) this.after(delay, () => { void this.poll(t, o); });
+  }
+
+  /** Map the latest server snapshot (plus my not-yet-confirmed words) onto GameState. Returns ms until the next check-in. */
+  private render(o: Online): number {
+    const snap = o.snap;
+    if (!snap) return 1000;
+    const m = snap.match;
+    const toLocal = (ts: string | null) => (ts ? parseTs(ts) - o.offset : 0);
+    const mine = snap.players.find((p) => p.is_me);
+    if (mine) o.myPid = mine.id;
+    const mapId = (id: string) => (id === o.myPid ? HUMAN_ID : id);
+
+    // New round: new source, fresh word history.
+    if (m.round !== o.round) {
+      o.round = m.round;
+      o.extras.clear();
+      o.queue = [];
+      if (m.source) {
+        this.srcCounts = letterCounts(sourceLetters(m.source));
+        this.banned = bannedWords(m.source);
+      }
+    }
+    const roundStart = toLocal(m.round_started_at);
+    const serverWords: WordEntry[] = snap.my_words.map((x) => ({ word: x.word, points: x.points, at: toLocal(x.at) - roundStart }));
+    const seen = new Set(serverWords.map((x) => x.word));
+    o.extras.forEach((_, k) => { if (seen.has(k)) o.extras.delete(k); });
+    const extra = [...o.extras.values()];
+    const extraPts = extra.reduce((n, x) => n + x.points, 0);
+    const myWords = [...extra, ...serverWords].sort((a, b) => b.at - a.at);
+
+    const prev = new Map(this.state.players.map((p) => [p.id, p]));
+    const players: Player[] = snap.players
+      .slice()
+      .sort((a, b) => Number(b.is_me) - Number(a.is_me) || a.seat - b.seat)
+      .map((sp) => {
+        const id = mapId(sp.id);
+        const me = sp.is_me;
+        const base = prev.get(id) ?? makePlayer(id, sp.name, sp.name[0]?.toUpperCase() ?? '?', sp.hue, me ? 'human' : sp.is_bot ? 'bot' : 'remote');
+        let longest = sp.longest_word;
+        if (me) for (const x of extra) if (x.word.length > longest.length) longest = x.word;
+        let best: { word: string; points: number } | null = null;
+        if (me) for (const x of myWords) if (!best || x.points > best.points) best = { word: x.word, points: x.points };
+        return {
+          ...base,
+          name: sp.name,
+          photo: me ? this.photo ?? sp.photo_url : sp.photo_url,
+          hue: sp.hue,
+          roundScore: sp.round_score + (me ? extraPts : 0),
+          totalScore: sp.total_score + (me ? extraPts : 0),
+          roundWords: me ? myWords : [],
+          reachedAt: me && extra.length ? Math.max(...extra.map((x) => x.at)) : sp.reached_at ? toLocal(sp.reached_at) - roundStart : 1e9,
+          stats: { wordsFound: sp.words_found + (me ? extra.length : 0), longestWord: longest, bestWord: me ? best ?? base.stats.bestWord : null },
+          status: sp.status,
+          eliminatedInRound: sp.eliminated_round,
+          placement: sp.placement,
+          tiebreak: sp.tiebreak,
+        };
+      });
+
+    const le = m.last_elimination;
+    const lastElimination: Elimination | null = le ? {
+      round: le.round, playerId: mapId(le.player_id), roundScore: le.round_score, remaining: le.remaining,
+      standings: le.standings.map((r) => ({ id: mapId(r.id), roundScore: r.round_score, totalScore: r.total_score })),
+    } : null;
+
+    const meP = players.find((p) => p.id === HUMAN_ID);
+    const imOut = meP?.status === 'eliminated';
+    const now = Date.now();
+    const base = {
+      round: m.round, source: m.source ?? '', possibleWords: m.possible_words, lastElimination,
+      roundStartedAt: roundStart, roundEndsAt: toLocal(m.round_ends_at),
+    };
+    let next = 1000;
+    const until = (ts: string | null) => Math.min(1000, Math.max(150, toLocal(ts) - now + 120));
+
+    if (m.status === 'lobby' || m.status === 'prematch') {
+      this.set({
+        ...base, phase: m.status, players: m.status === 'lobby' ? padSlots(players) : players,
+        lobbyFilled: players.length, prematchEndsAt: toLocal(m.prematch_ends_at), accepting: false,
+      });
+      if (m.status === 'prematch') next = until(m.prematch_ends_at);
+    } else if (m.status === 'final') {
+      o.done = true;
+      this.set({ ...base, phase: 'final', players, winnerId: m.winner_id ? mapId(m.winner_id) : null, accepting: false, awaitingChoice: false, nextRoundAt: 0 });
+      this.countMatch(m.winner_id === o.myPid, meP?.placement ?? 0);
+      return 0;
+    } else if (imOut && o.choice === 'none') {
+      // Just knocked out: stay on the result until the player chooses.
+      this.set({ ...base, phase: 'elimination', players, awaitingChoice: true, accepting: false, nextRoundAt: 0 });
+      this.countMatch(false, meP?.placement ?? 0);
+    } else if (m.status === 'round') {
+      this.set({ ...base, phase: 'round', players, accepting: !imOut && now < base.roundEndsAt, awaitingChoice: false });
+      next = until(m.round_ends_at);
+    } else {
+      this.set({ ...base, phase: 'elimination', players, accepting: false, awaitingChoice: false, nextRoundAt: toLocal(m.next_round_at) });
+      next = until(m.next_round_at);
+    }
+    return next;
+  }
+
+  private submitOnline(o: Online, raw: string): Validation {
+    const s = this.state;
+    const me = s.players.find((p) => p.id === HUMAN_ID);
+    const accepting = s.phase === 'round' && !!me && me.status === 'active' && Date.now() < s.roundEndsAt;
+    const used = new Set(me?.roundWords.map((x) => x.word));
+    const result = validateSubmission(raw, this.srcCounts, used, accepting, this.banned);
+    if (!result.ok) return result;
+    // Count it right away; the server confirms (or takes it back) a moment later.
+    o.extras.set(result.word, { word: result.word, points: result.points, at: Date.now() - s.roundStartedAt });
+    o.queue.push(result.word);
+    this.render(o);
+    if (!o.flushScheduled) {
+      o.flushScheduled = true;
+      setTimeout(() => { o.flushScheduled = false; void this.flush(o); }, 0);
+    }
+    return result;
+  }
+
+  /** Send queued words (comma batches go together in one request). */
+  private async flush(o: Online, attempt = 0) {
+    if (!o.queue.length || this.online !== o) return;
+    const round = o.round;
+    const words = o.queue.splice(0, 20);
+    const { data, error } = await supabase.rpc('mm_submit', { p_match: o.matchId, p_words: words }).then((r) => r, () => ({ data: null, error: true }));
+    if (this.online !== o || o.round !== round) return;
+    if (error || !Array.isArray(data)) {
+      if (attempt < 2) { o.queue.unshift(...words); setTimeout(() => { void this.flush(o, attempt + 1); }, 400); return; }
+      words.forEach((wd) => o.extras.delete(wd));
+    } else {
+      for (const r of data as SubmitReply[]) if (!r.ok) o.extras.delete(r.word);
+    }
+    this.render(o);
+    if (o.queue.length) void this.flush(o);
   }
 }
 

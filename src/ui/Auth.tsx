@@ -59,7 +59,6 @@ export function DevControls({ open, onClose, signedIn }: { open: boolean; onClos
         {!signedIn && <DevRow title={busy ? 'Signing in…' : 'Skip sign-up and onboarding'} sub="Signs in with the Supabase test number from .env (no text is sent)" onPress={busy ? undefined : () => run(() => accounts.devSkipSignup())} right={<Text style={{ color: w(0.4) }}>→</Text>} />}
         {signedIn && (
           <>
-            <DevRow title="Add a test win" sub="Saves a real win to this account so you can test ranks" onPress={() => { Haptics.selectionAsync().catch(() => {}); run(() => accounts.devAddWin(), false); }} right={<Text style={{ fontFamily: F.display, color: C.mint }}>+1</Text>} />
             <DevRow title="Restart onboarding" sub="Clears name, photo and region for this account" onPress={() => run(() => accounts.devRestartOnboarding())} right={<Text style={{ color: w(0.4) }}>→</Text>} />
           </>
         )}
