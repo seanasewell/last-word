@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { accounts, weekRange, winsFor, type Account, type Period } from '@/lib/account';
 import { engine, type GameState } from '@/lib/engine';
 import { fetchLeaderboard, type Leaderboard, type RankEntry, type Scope } from '@/lib/ranks';
-import { COUNTRIES, countryByCode, maskPhone } from '@/lib/regions';
+import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { scoreWord } from '@/lib/words';
 import { cleanName, DevControls, NAME_MAX, nameError } from './Auth';
 import { Avatar, Button, Card, FadeUp, inputStyle, OptionSheet, ordinal, s, Screen, Sheet, TileLogo, Toggle, useNow } from './kit';
@@ -262,7 +262,7 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
 function ProfileTab({ account, best }: { account: Account; best: number }) {
   const [name, setName] = useState(account.name);
   const [saved, setSaved] = useState(false);
-  const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'logout' | 'delete' | 'dev'>(null);
+  const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'delete' | 'dev'>(null);
   const [photoErr, setPhotoErr] = useState<string | null>(null);
   const [sound, setSound] = useState(soundEnabled);
   useEffect(() => onSoundChange(() => setSound(soundEnabled())), []);
@@ -332,10 +332,6 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
           </View>
           {dirty && err && <Text style={{ marginTop: 4, fontFamily: F.body, fontSize: 12, color: C.coral }}>{err}</Text>}
         </View>
-        <View style={row}>
-          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>Phone</Text>
-          <Text style={[{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }, s.tabular]}>{maskPhone(account.phone)}</Text>
-        </View>
         <Pressable onPress={() => setSheet('country')} style={row}>
           <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>Country</Text>
           <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{country.flag} {country.name}  ›</Text>
@@ -359,7 +355,6 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
       </Pressable>
 
       <View style={{ gap: 10, marginTop: 26 }}>
-        <Button title="Log out" variant="ghost" onPress={() => setSheet('logout')} />
         <Pressable onPress={() => setSheet('delete')} style={{ height: 48, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ fontFamily: F.bodyBold, fontSize: 16, color: C.coral }}>Delete account</Text>
         </Pressable>
@@ -377,13 +372,6 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         onPick={(v) => { const c = countryByCode(v); accounts.update({ country: c.code, region: c.regions[0] }); }} />
       <OptionSheet open={sheet === 'region'} onClose={() => setSheet(null)} title={country.regionLabel} value={account.region}
         options={country.regions.map((r) => ({ value: r, label: r }))} onPick={(v) => accounts.update({ region: v })} />
-      <Sheet open={sheet === 'logout'} onClose={() => setSheet(null)} title="Log out?">
-        <Text style={s.body}>You can log back in any time with {maskPhone(account.phone)}.</Text>
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-          <Button title="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => setSheet(null)} />
-          <Button title="Log out" style={{ flex: 1 }} onPress={() => { setSheet(null); void accounts.logOut(); }} />
-        </View>
-      </Sheet>
       <Sheet open={sheet === 'delete'} onClose={() => setSheet(null)} title="Delete your account?">
         <Text style={s.body}>{"This permanently removes your profile, photo, wins and stats. This can't be undone."}</Text>
         {deleteErr && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral }}>{deleteErr}</Text>}

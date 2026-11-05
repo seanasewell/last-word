@@ -1,16 +1,16 @@
 // ── Account system (Supabase) ──────────────────────────────────────────────
-// Phone sign-in with a one-time code sent by text, player profiles, photos,
-// and match results, all stored in Supabase. The phone number lives only in
-// Supabase Auth; the public `profiles` table never contains it.
+// Anonymous accounts: tapping Play creates a Supabase anonymous user, kept
+// signed in on this phone. Profiles, photos and match results live in
+// Supabase. There's no phone or email, so an account can't be recovered on
+// another phone — deleting the app loses it.
 import { decode } from 'base64-arraybuffer';
 
 import { kv } from './kv';
-import { countryByCode } from './regions';
-import { DEV_TEST_CODE, DEV_TEST_PHONE, supabase } from './supabase';
+import { COUNTRIES } from './regions';
+import { supabase } from './supabase';
 
 export interface Account {
   id: string;
-  phone: string; // E.164
   country: string; // ISO code
   region: string;
   name: string;
@@ -24,15 +24,12 @@ export interface Account {
   soloBest: number;
 }
 
-interface PendingCode { phone: string; country: string; sentAt: number }
-
 export interface AuthState {
   /** False until the saved session has been checked at launch. */
   ready: boolean;
   account: Account | null;
   /** Signed in but onboarding not finished. */
   onboarding: boolean;
-  pending: PendingCode | null;
 }
 
 export type Period = 'day' | 'week' | 'month' | 'year' | 'all';
@@ -63,15 +60,25 @@ export function winsFor(a: Account, period: Period, now = new Date()): number {
   return n;
 }
 
+/** Best guess at the player's country from the phone's region setting. */
+function deviceCountry(): string {
+  try {
+    const region = new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale).maximize().region;
+    if (region && COUNTRIES.some((c) => c.code === region)) return region;
+  } catch {
+    // Fall back below.
+  }
+  return 'US';
+}
+
 const isComplete = (a: Account) => !!a.name && !!a.region;
 
 /** Turn Supabase errors into short, player-facing messages. */
 function friendly(message: string | undefined): string {
   const m = (message ?? '').toLowerCase();
-  if (m.includes('signups not allowed') || m.includes('user not found')) return 'No account uses this number yet.';
-  if (m.includes('expired') || m.includes('invalid')) return "That code isn't right or has expired. Check the text and try again.";
+  if (m.includes('captcha')) return "Couldn't confirm you're a person. Try again.";
+  if (m.includes('anonymous sign-ins are disabled')) return "New players can't join right now. Try again later.";
   if (m.includes('rate') || m.includes('security purposes') || m.includes('too many')) return 'Too many attempts. Wait a minute and try again.';
-  if (m.includes('sms') || m.includes('provider') || m.includes('twilio')) return "We couldn't send a text right now. Try again in a moment.";
   if (m.includes('network') || m.includes('fetch')) return "Can't reach the server. Check your connection.";
   return 'Something went wrong. Try again.';
 }
@@ -79,10 +86,8 @@ function friendly(message: string | undefined): string {
 type Listener = () => void;
 
 class AccountStore {
-  private state: AuthState = { ready: false, account: null, onboarding: false, pending: null };
+  private state: AuthState = { ready: false, account: null, onboarding: false };
   private listeners = new Set<Listener>();
-  /** Country chosen at sign-up, used to seed a brand-new profile. */
-  private signupCountry = 'US';
 
   subscribe = (fn: Listener) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
   getState = () => this.state;
@@ -107,7 +112,7 @@ class AccountStore {
 
     let { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
     if (!profile) {
-      const created = await supabase.from('profiles').insert({ id: user.id, country: this.signupCountry }).select('*').single();
+      const created = await supabase.from('profiles').insert({ id: user.id, country: deviceCountry() }).select('*').single();
       profile = created.data;
     }
     const { data: results } = await supabase.from('match_results').select('won, played_at').eq('user_id', user.id);
@@ -129,7 +134,6 @@ class AccountStore {
 
     const account: Account = {
       id: user.id,
-      phone: user.phone ? `+${user.phone.replace(/^\+/, '')}` : '',
       country: profile?.country ?? 'US',
       region: profile?.region ?? '',
       name: profile?.name ?? '',
@@ -142,26 +146,16 @@ class AccountStore {
     this.set({ account, onboarding: !isComplete(account) });
   }
 
-  /** Text a 6-digit code. `mode: 'login'` refuses unknown numbers. Returns an error message or null. */
-  async requestCode(countryCode: string, nationalDigits: string, mode: 'create' | 'login'): Promise<string | null> {
-    const c = countryByCode(countryCode);
-    const phone = `${c.dial}${nationalDigits}`;
-    const { error } = await supabase.auth.signInWithOtp({ phone, options: { shouldCreateUser: mode === 'create', channel: 'sms' } });
-    if (error) return friendly(error.message);
-    this.signupCountry = c.code;
-    this.set({ pending: { phone, country: c.code, sentAt: Date.now() } });
-    return null;
-  }
-
-  /** Check the code; on success the player is signed in. Returns an error message or null. */
-  async verifyCode(code: string): Promise<string | null> {
-    const p = this.state.pending;
-    if (!p) return 'Send a new code first.';
-    const { error } = await supabase.auth.verifyOtp({ phone: p.phone, token: code, type: 'sms' });
-    if (error) return friendly(error.message);
-    await this.refresh();
-    this.set({ pending: null });
-    return null;
+  /** Create a new anonymous player on this phone. `captchaToken` comes from the human check. Returns an error message or null. */
+  async start(captchaToken: string): Promise<string | null> {
+    try {
+      const { error } = await supabase.auth.signInAnonymously({ options: { captchaToken } });
+      if (error) return friendly(error.message);
+      await this.refresh();
+      return null;
+    } catch (e) {
+      return friendly(e instanceof Error ? e.message : '');
+    }
   }
 
   /** Save profile changes. A `photo` given as a data: URI is uploaded first. */
@@ -206,11 +200,6 @@ class AccountStore {
     if (a && isComplete(a)) this.set({ onboarding: false });
   }
 
-  async logOut() {
-    await supabase.auth.signOut().catch(() => {});
-    this.set({ account: null, onboarding: false, pending: null });
-  }
-
   /** Permanently delete the account, photo, profile and results. */
   async deleteAccount(): Promise<string | null> {
     const a = this.state.account;
@@ -220,7 +209,7 @@ class AccountStore {
     if (error) return "Couldn't delete the account. Try again.";
     kv.remove(`lw.best.${a.id}`);
     await supabase.auth.signOut().catch(() => {});
-    this.set({ account: null, onboarding: false, pending: null });
+    this.set({ account: null, onboarding: false });
     return null;
   }
 
@@ -238,29 +227,23 @@ class AccountStore {
   }
 
   // ── developer controls ──
-  /** Signs in with the Supabase test number and its fixed code (no text is sent). */
-  async devSkipSignup(): Promise<string | null> {
-    if (!DEV_TEST_PHONE || !DEV_TEST_CODE) return 'No developer test number is set in .env.';
-    const { error } = await supabase.auth.signInWithOtp({ phone: DEV_TEST_PHONE, options: { shouldCreateUser: true } });
-    if (error) return `Developer sign-in failed: ${friendly(error.message)} Make sure the test number is added in Supabase.`;
-    this.state.pending = { phone: DEV_TEST_PHONE, country: 'US', sentAt: Date.now() };
-    const err = await this.verifyCode(DEV_TEST_CODE);
+  /** Creates a new player and fills in onboarding with test values. */
+  async devSkipSignup(captchaToken: string): Promise<string | null> {
+    const err = await this.start(captchaToken);
     if (err) return err;
-    const a = this.state.account;
-    if (a && !isComplete(a)) {
-      await this.update({ name: a.name || 'Dev tester', region: a.region || 'California', country: 'US' });
-      this.finishOnboarding();
-    }
+    await this.update({ name: 'Dev tester', region: 'California', country: 'US' });
+    this.finishOnboarding();
     return null;
   }
   async devRestartOnboarding() {
     await this.update({ name: '', region: '', photo: null }).catch(() => null);
     this.set({ onboarding: true });
   }
-  /** Signs out and clears this phone's local data (server data is untouched). */
+  /** Signs out and clears this phone's local data. The old player stays on the server but can't be reached again. */
   async devResetAll() {
     kv.keys().filter((k) => k.startsWith('lw.')).forEach((k) => kv.remove(k));
-    await this.logOut();
+    await supabase.auth.signOut().catch(() => {});
+    this.set({ account: null, onboarding: false });
   }
 }
 

@@ -28,5 +28,3 @@ if (Platform.OS !== 'web') {
   });
 }
 
-export const DEV_TEST_PHONE = process.env.EXPO_PUBLIC_DEV_TEST_PHONE ?? '';
-export const DEV_TEST_CODE = process.env.EXPO_PUBLIC_DEV_TEST_CODE ?? '';
