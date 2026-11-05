@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex">
+<title>Last word · Human check</title>
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; }
+  body { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+</style>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=lwInit&render=explicit" async defer></script>
+</head>
+<body>
+<div id="widget"></div>
+<script>
+  // Used inside the Last word app's WebView. Runs a Cloudflare Turnstile check
+  // and hands the one-time token back to the app. The token is only useful to
+  // Supabase sign-in; it is not stored here.
+  var SITE_KEY = '0x4AAAAAAF1Rj6Bc0kodz9fA';
+  var widgetId = null;
+
+  function send(msg) {
+    var data = JSON.stringify(msg);
+    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(data);
+    else if (window.parent !== window) window.parent.postMessage(data, '*');
+  }
+
+  window.lwReset = function () {
+    if (widgetId !== null && window.turnstile) window.turnstile.reset(widgetId);
+  };
+
+  window.lwInit = function () {
+    widgetId = window.turnstile.render('#widget', {
+      sitekey: SITE_KEY,
+      theme: 'dark',
+      appearance: 'interaction-only',
+      action: 'signup',
+      'refresh-expired': 'auto',
+      callback: function (token) { send({ type: 'token', token: token }); },
+      'expired-callback': function () { send({ type: 'expired' }); },
+      'error-callback': function (code) { send({ type: 'error', code: String(code) }); return true; },
+      'before-interactive-callback': function () { send({ type: 'interactive' }); },
+      'after-interactive-callback': function () { send({ type: 'done-interactive' }); }
+    });
+    send({ type: 'ready' });
+  };
+</script>
+</body>
+</html>
