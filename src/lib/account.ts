@@ -235,6 +235,15 @@ class AccountStore {
     this.finishOnboarding();
     return null;
   }
+  /** This player's hidden bot-difficulty level (1 = normal). */
+  async devBotSkill(): Promise<number | null> {
+    const { data, error } = await supabase.rpc('my_bot_skill');
+    return error ? null : Number(data);
+  }
+  async devResetBotSkill(): Promise<string | null> {
+    const { error } = await supabase.rpc('reset_my_bot_skill');
+    return error ? "Couldn't reset it. Try again." : null;
+  }
   async devRestartOnboarding() {
     await this.update({ name: '', region: '', photo: null }).catch(() => null);
     this.set({ onboarding: true });

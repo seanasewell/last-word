@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { accounts } from '@/lib/account';
@@ -49,6 +49,13 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const close = () => { setConfirmReset(false); setMsg(null); onClose(); };
+  const [skill, setSkill] = useState<number | null>(null);
+  useEffect(() => {
+    if (!open || !signedIn) return;
+    let live = true;
+    void accounts.devBotSkill().then((v) => { if (live) setSkill(v); });
+    return () => { live = false; };
+  }, [open, signedIn]);
   const run = async (fn: () => Promise<string | null | void>, closeAfter = true) => {
     setBusy(true); setMsg(null);
     const err = await fn();
@@ -63,6 +70,9 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
           onPress={busy || !captchaToken ? undefined : () => run(async () => { const err = await accounts.devSkipSignup(captchaToken); onTokenUsed?.(); return err; })} right={<Text style={{ color: w(0.55) }}>→</Text>} />}
         {signedIn && (
           <>
+            <DevRow title="Bot difficulty" sub={skill == null ? 'Loading…' : `${skill.toFixed(2)}× · goes up when you win, down when you're knocked out early. Tap to reset`}
+              onPress={() => run(async () => { const err = await accounts.devResetBotSkill(); if (!err) setSkill(1); return err; }, false)}
+              right={<Text style={{ fontFamily: F.display, color: C.mint }}>{skill == null ? '' : `${skill.toFixed(2)}×`}</Text>} />
             <DevRow title="Restart onboarding" sub="Clears name, photo and region for this account" onPress={() => run(() => accounts.devRestartOnboarding())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
           </>
         )}
