@@ -198,10 +198,10 @@ class AccountStore {
       ...(row.photo_url !== undefined ? { photo: row.photo_url } : {}),
     };
     this.set({ account: next });
-    const { error } = await supabase.from('profiles').update(row).eq('id', a.id);
-    if (error) {
+    const { data: saved, error } = await supabase.from('profiles').update(row).eq('id', a.id).select('id');
+    if (error || !saved?.length) {
       this.set({ account: a });
-      return error.message.includes('name-not-allowed') ? "That name isn't allowed. Try another." : "Couldn't save that change. Try again.";
+      return error?.message.includes('name-not-allowed') ? "That name isn't allowed. Try another." : "Couldn't save that change. Try again.";
     }
     return null;
   }
@@ -271,10 +271,6 @@ class AccountStore {
   async devBotSkill(): Promise<number | null> {
     const { data, error } = await supabase.rpc('my_bot_skill');
     return error ? null : Number(data);
-  }
-  async devResetBotSkill(): Promise<string | null> {
-    const { error } = await supabase.rpc('reset_my_bot_skill');
-    return error ? "Couldn't reset it. Try again." : null;
   }
   async devRestartOnboarding() {
     await this.update({ name: '', region: '', photo: null }).catch(() => null);

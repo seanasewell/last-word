@@ -251,15 +251,6 @@ class ProgressStore {
       return null;
     }
   }
-
-  /** Developer: start XP, achievements, challenges and streaks over for this player. */
-  async devResetProgress(): Promise<string | null> {
-    const { error } = await supabase.rpc('reset_my_progress');
-    if (error) return "Couldn't reset progress.";
-    this.commit(blank());
-    await this.refresh();
-    return null;
-  }
 }
 
 export const progress = new ProgressStore();

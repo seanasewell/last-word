@@ -338,7 +338,7 @@ export function GameScreen({ s: g }: { s: GameState }) {
           <View style={{ minWidth: 84 }}>{!spectating && <ScoreBadge score={me.roundScore} />}</View>
         </View>
 
-        <View key={roundKey} style={{ paddingBottom: 14 }}>
+        <View key={`source-${roundKey}`} style={{ paddingBottom: 14 }}>
           <SourceTiles source={g.source} final={final} />
         </View>
 
@@ -348,7 +348,7 @@ export function GameScreen({ s: g }: { s: GameState }) {
             <Pressable onPress={() => engine.goMenu()} hitSlop={10}><Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.primary }}>Leave</Text></Pressable>
           </View>
         ) : (
-          <WordInput key={roundKey} final={final} />
+          <WordInput key={`input-${roundKey}`} final={final} />
         )}
 
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 4, paddingBottom: insets.bottom + 24, gap: 14 }}>

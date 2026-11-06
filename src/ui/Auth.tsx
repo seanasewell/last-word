@@ -4,7 +4,6 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } fro
 import { accounts } from '@/lib/account';
 import { engine } from '@/lib/engine';
 import { nameAllowed } from '@/lib/nameFilter';
-import { progress } from '@/lib/progress';
 import { SHOW_DEV_TOOLS } from '@/lib/release';
 import type { Provider } from '@/lib/social';
 import { COUNTRIES, countryByCode } from '@/lib/regions';
@@ -76,13 +75,10 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
           onPress={busy || !captchaToken ? undefined : () => run(async () => { const err = await accounts.devSkipSignup(captchaToken); onTokenUsed?.(); return err; })} right={<Text style={{ color: w(0.55) }}>→</Text>} />}
         {signedIn && (
           <>
-            <DevRow title="Bot difficulty" sub={skill == null ? 'Loading…' : `${skill.toFixed(2)}× · goes up when you win, down when you're knocked out early. Tap to reset`}
-              onPress={() => run(async () => { const err = await accounts.devResetBotSkill(); if (!err) setSkill(1); return err; }, false)}
+            <DevRow title="Bot difficulty" sub={skill == null ? 'Loading…' : `${skill.toFixed(2)}× · goes up when you win, down when you're knocked out early`}
               right={<Text style={{ fontFamily: F.display, color: C.mint }}>{skill == null ? '' : `${skill.toFixed(2)}×`}</Text>} />
             <DevRow title="Jump to the championship round" sub="A 1v1 against a bot, as if you'd survived rounds 1–4. Played on this phone only; not counted toward ranks or XP"
               onPress={() => { onClose(); engine.devStartChampionship(); }} right={<Text style={{ color: w(0.55) }}>→</Text>} />
-            <DevRow title="Reset XP and achievements" sub="Back to level 1 with nothing unlocked. Ranks and wins are kept"
-              onPress={() => run(() => progress.devResetProgress())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
             <DevRow title="Restart onboarding" sub="Clears name, photo and region for this account" onPress={() => run(() => accounts.devRestartOnboarding())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
           </>
         )}
