@@ -6,11 +6,13 @@ import { engine } from '@/lib/engine';
 import { nameAllowed } from '@/lib/nameFilter';
 import { progress } from '@/lib/progress';
 import { SHOW_DEV_TOOLS } from '@/lib/release';
+import type { Provider } from '@/lib/social';
 import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { AnimatedTileLogo } from './AnimatedLogo';
 import { Captcha, type CaptchaHandle } from './Captcha';
 import { Avatar, Button, FadeUp, OptionSheet, s, Screen, SelectRow, Sheet, TextField, useAuth } from './kit';
 import { pickPhoto } from './photo';
+import { ProviderButtons } from './SignIn';
 import { C, F, w } from './theme';
 
 const BackButton = ({ onPress }: { onPress: () => void }) => (
@@ -79,14 +81,12 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
               right={<Text style={{ fontFamily: F.display, color: C.mint }}>{skill == null ? '' : `${skill.toFixed(2)}×`}</Text>} />
             <DevRow title="Jump to the championship round" sub="A 1v1 against a bot, as if you'd survived rounds 1–4. Played on this phone only; not counted toward ranks or XP"
               onPress={() => { onClose(); engine.devStartChampionship(); }} right={<Text style={{ color: w(0.55) }}>→</Text>} />
-            <DevRow title="Simulate half of achievements unlocked" sub="Level 25, a 7-day streak and 30 of 59 achievements"
-              onPress={() => run(() => progress.devSimulateHalf())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
             <DevRow title="Reset XP and achievements" sub="Back to level 1 with nothing unlocked. Ranks and wins are kept"
               onPress={() => run(() => progress.devResetProgress())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
             <DevRow title="Restart onboarding" sub="Clears name, photo and region for this account" onPress={() => run(() => accounts.devRestartOnboarding())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
           </>
         )}
-        <DevRow danger armed={confirmReset} title={confirmReset ? 'Tap again to sign out and clear' : 'Reset this phone'} sub="Starts over as a brand-new player. The current one can't be recovered"
+        <DevRow danger armed={confirmReset} title={confirmReset ? 'Tap again to sign out and clear' : 'Reset this phone'} sub="Signs out and clears this phone. A guest player can't be recovered"
           onPress={() => { if (confirmReset) run(() => accounts.devResetAll()); else setConfirmReset(true); }} />
         {msg && <Text style={{ fontFamily: F.body, fontSize: 13, color: C.coral, marginTop: 4 }}>{msg}</Text>}
       </View>
@@ -97,11 +97,13 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
 // ── Welcome ────────────────────────────────────────────────────────────────
 export function AuthFlow() {
   const [starting, setStarting] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dev, setDev] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false); // tapped Play before the check finished
   const captcha = useRef<CaptchaHandle>(null);
+  const busy = starting || waiting || signingIn;
 
   const begin = async (t: string) => {
     setStarting(true);
@@ -113,12 +115,21 @@ export function AuthFlow() {
       captcha.current?.reset(); // tokens work once; get a new one
     }
   };
-  const play = () => {
-    if (starting) return;
+  const guest = () => {
+    if (busy) return;
     setError(null);
     if (token) { void begin(token); return; }
     setWaiting(true);
     captcha.current?.reset();
+  };
+  const signIn = async (p: Provider) => {
+    if (busy) return;
+    setSigningIn(true);
+    setError(null);
+    const r = await accounts.signIn(p, token);
+    setSigningIn(false);
+    if (r.kind === 'error') setError(r.message);
+    if (token) captcha.current?.reset();
   };
   const onToken = (t: string | null) => {
     setToken(t);
@@ -136,11 +147,13 @@ export function AuthFlow() {
         <View style={{ gap: 10, paddingBottom: 8 }}>
           <Captcha ref={captcha} onToken={onToken} onError={onCaptchaError} />
           {error && <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 14, color: C.coral }}>{error}</Text>}
-          <Button title={starting || waiting ? 'Starting…' : 'Play'} disabled={starting || waiting} onPress={play} />
-{SHOW_DEV_TOOLS && (
-          <Pressable onPress={() => setDev(true)} hitSlop={10} style={{ alignSelf: 'center', paddingTop: 10 }}>
-            <Text style={{ fontFamily: F.bodySemi, fontSize: 12, color: w(0.6) }}>🛠 Developer controls</Text>
-          </Pressable>
+          <ProviderButtons busy={busy} onPick={(p) => { void signIn(p); }} />
+          <Button title={starting || waiting ? 'Starting…' : 'Play as a guest'} variant="ghost" disabled={busy} onPress={guest} />
+          <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 12, color: w(0.6) }}>Sign in to keep your progress on any phone.</Text>
+          {SHOW_DEV_TOOLS && (
+            <Pressable onPress={() => setDev(true)} hitSlop={10} style={{ alignSelf: 'center', paddingTop: 6 }}>
+              <Text style={{ fontFamily: F.bodySemi, fontSize: 12, color: w(0.6) }}>🛠 Developer controls</Text>
+            </Pressable>
           )}
         </View>
       </View>

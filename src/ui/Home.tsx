@@ -15,6 +15,7 @@ import { Avatar, Button, Card, FadeUp, OptionSheet, ordinal, s, Screen, Sheet, T
 import { pickPhoto } from './photo';
 import { DailyChallenges, LevelCard, LevelingGuide, RewardsTab, SweepBorder } from './Progress';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
+import { PROVIDER_NAME, SaveProgressCard, SaveProgressNudge } from './SignIn';
 import { onSoundChange, setSoundEnabled, soundEnabled } from './sound';
 import { C, F, w } from './theme';
 
@@ -68,12 +69,13 @@ function FullWidthLogo() {
   return <TileLogo size={size} />;
 }
 
-function PlayTab({ best }: { best: number }) {
+function PlayTab({ best, account }: { best: number; account: Account }) {
   return (
     <View>
       <View style={{ paddingTop: 36 }}><FullWidthLogo /></View>
 
       <FadeUp delay={60} style={{ marginTop: 24 }}><LevelCard /></FadeUp>
+      <FadeUp delay={90} style={{ marginTop: 12 }}><SaveProgressNudge account={account} /></FadeUp>
 
       <FadeUp delay={120} style={{ marginTop: 12, gap: 12 }}>
         <Pressable onPress={() => engine.startMatch()} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
@@ -290,7 +292,7 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
 function ProfileTab({ account, best }: { account: Account; best: number }) {
   const [name, setName] = useState(account.name);
   const [saved, setSaved] = useState(false);
-  const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'delete' | 'dev' | 'blocked' | 'scoring' | 'leveling'>(null);
+  const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'delete' | 'signout' | 'dev' | 'blocked' | 'scoring' | 'leveling'>(null);
   const [photoErr, setPhotoErr] = useState<string | null>(null);
   const [sound, setSound] = useState(soundEnabled);
   useEffect(() => onSoundChange(() => setSound(soundEnabled())), []);
@@ -347,8 +349,16 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         ))}
       </View>
 
+      {!account.provider && <View style={{ marginTop: 20 }}><SaveProgressCard /></View>}
+
       <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Account</Text>
       <View style={{ borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' }}>
+        {account.provider && (
+          <View style={row}>
+            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>Signed in with</Text>
+            <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{PROVIDER_NAME[account.provider]}</Text>
+          </View>
+        )}
         <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.divider }}>
           <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.7) }}>Display name</Text>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
@@ -413,6 +423,11 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
       )}
 
       <View style={{ gap: 10, marginTop: 26 }}>
+        {account.provider && (
+          <Pressable onPress={() => setSheet('signout')} style={{ height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
+            <Text style={{ fontFamily: F.bodyBold, fontSize: 16, color: C.white }}>Sign out</Text>
+          </Pressable>
+        )}
         <Pressable onPress={() => setSheet('delete')} style={{ height: 48, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ fontFamily: F.bodyBold, fontSize: 16, color: C.coral }}>Delete account</Text>
         </Pressable>
@@ -438,8 +453,15 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         onPick={(v) => { const c = countryByCode(v); accounts.update({ country: c.code, region: c.regions[0] }); }} />
       <OptionSheet open={sheet === 'region'} onClose={() => setSheet(null)} title={country.regionLabel} value={account.region}
         options={country.regions.map((r) => ({ value: r, label: r }))} onPick={(v) => accounts.update({ region: v })} />
+      <Sheet open={sheet === 'signout'} onClose={() => setSheet(null)} title="Sign out?">
+        <Text style={s.body}>{`Your progress is saved. Sign in with ${account.provider ? PROVIDER_NAME[account.provider] : ''} to pick up where you left off.`}</Text>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+          <Button title="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => setSheet(null)} />
+          <Button title="Sign out" style={{ flex: 1 }} onPress={() => { setSheet(null); void accounts.signOut(); }} />
+        </View>
+      </Sheet>
       <Sheet open={sheet === 'delete'} onClose={() => setSheet(null)} title="Delete your account?">
-        <Text style={s.body}>{"This permanently removes your profile, photo, wins and stats. This can't be undone."}</Text>
+        <Text style={s.body}>{"This permanently removes your profile, photo, wins, level and achievements. This can't be undone."}</Text>
         {deleteErr && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral }}>{deleteErr}</Text>}
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
           <Button title="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => { setDeleteErr(null); setSheet(null); }} />
@@ -509,7 +531,7 @@ export function Home({ s: g, account }: { s: GameState; account: Account }) {
       <ScrollView key={tab} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 16, paddingBottom: 32 }}
         refreshControl={tab === 'play' || tab === 'rewards' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
         <Animated.View entering={FadeIn.duration(200)}>
-          {tab === 'play' && <PlayTab best={g.personalBest} />}
+          {tab === 'play' && <PlayTab best={g.personalBest} account={account} />}
           {tab === 'ranks' && <RanksTab account={account} refreshKey={refreshKey} />}
           {tab === 'rewards' && <RewardsTab />}
           {tab === 'profile' && <ProfileTab account={account} best={g.personalBest} />}

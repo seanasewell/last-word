@@ -17,6 +17,7 @@ export const supabase = createClient(url || 'https://invalid.supabase.co', key |
     persistSession: true,
     detectSessionInUrl: false,
     lock: processLock,
+    flowType: 'pkce', // Google sign-in returns a one-time code that only this phone can redeem
   },
 });
 

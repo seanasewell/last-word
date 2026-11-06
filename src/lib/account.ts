@@ -1,12 +1,12 @@
 // ── Account system (Supabase) ──────────────────────────────────────────────
-// Anonymous accounts: tapping Play creates a Supabase anonymous user, kept
-// signed in on this phone. Profiles, photos and match results live in
-// Supabase. There's no phone or email, so an account can't be recovered on
-// another phone — deleting the app loses it.
+// Players start as guests (anonymous Supabase users) and can link Apple or
+// Google at any time to save their progress, keeping the same player ID.
+// Profiles, photos, results and progress live in Supabase.
 import { decode } from 'base64-arraybuffer';
 
 import { kv } from './kv';
 import { COUNTRIES } from './regions';
+import { linkProvider, signInWithProvider, type Provider, type SocialResult } from './social';
 import { supabase } from './supabase';
 
 export interface Account {
@@ -22,6 +22,8 @@ export interface Account {
   totalWins: number;
   matchesPlayed: number;
   soloBest: number;
+  /** How this player signs in; null for a guest whose progress lives only on this phone. */
+  provider: Provider | null;
 }
 
 export interface AuthState {
@@ -69,6 +71,11 @@ function deviceCountry(): string {
     // Fall back below.
   }
   return 'US';
+}
+
+function providerOf(user: { identities?: { provider: string }[]; app_metadata?: { provider?: string; providers?: string[] } }): Provider | null {
+  const all = [...(user.identities ?? []).map((i) => i.provider), ...(user.app_metadata?.providers ?? []), user.app_metadata?.provider ?? ''];
+  return all.includes('apple') ? 'apple' : all.includes('google') ? 'google' : null;
 }
 
 const isComplete = (a: Account) => !!a.name && !!a.region;
@@ -142,6 +149,7 @@ class AccountStore {
       winsByDay, winsByWeek, totalWins,
       matchesPlayed: results?.length ?? 0,
       soloBest,
+      provider: user.is_anonymous ? null : providerOf(user),
     };
     this.set({ account, onboarding: !isComplete(account) });
   }
@@ -221,12 +229,33 @@ class AccountStore {
     await this.refresh().catch(() => {});
   }
 
-  /** Save a new solo personal best to the profile. */
+  /** Show a new solo personal best right away. The server records it when the game ends. */
   async saveSoloBest(score: number) {
     const a = this.state.account;
     if (!a || score <= a.soloBest) return;
     this.set({ account: { ...a, soloBest: score } });
-    await supabase.from('profiles').update({ solo_best: score }).eq('id', a.id);
+  }
+
+  // ── Apple / Google ──
+  /** Save this guest's progress to Apple or Google. Same player, same progress. */
+  async link(p: Provider): Promise<SocialResult> {
+    const r = await linkProvider(p);
+    if (r.kind === 'ok') await this.refresh().catch(() => {});
+    return r;
+  }
+
+  /** Sign in with Apple or Google, replacing any guest on this phone. */
+  async signIn(p: Provider, captchaToken?: string | null): Promise<SocialResult> {
+    const r = await signInWithProvider(p, captchaToken);
+    if (r.kind === 'ok') await this.refresh().catch(() => {});
+    return r;
+  }
+
+  /** Sign out of a saved (Apple/Google) player. Guests can't sign out: they'd lose everything. */
+  async signOut(): Promise<void> {
+    if (!this.state.account?.provider) return;
+    await supabase.auth.signOut().catch(() => {});
+    this.set({ account: null, onboarding: false });
   }
 
   // ── developer controls ──

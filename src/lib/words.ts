@@ -64,7 +64,7 @@ export function scoreWord(word: string): number {
   return 300 + 50 * (n - 9);
 }
 
-export type Rejection = 'closed' | 'too-short' | 'duplicate' | 'source-word' | 'letters' | 'not-word';
+export type Rejection = 'closed' | 'too-short' | 'duplicate' | 'source-word' | 'letters' | 'not-word' | 'too-fast';
 
 export const REJECTION_TEXT: Record<Rejection, string> = {
   closed: 'Round is over.',
@@ -73,6 +73,7 @@ export const REJECTION_TEXT: Record<Rejection, string> = {
   'source-word': "Can't use the source word.",
   letters: "Those letters aren't available.",
   'not-word': 'Not a recognized word.',
+  'too-fast': 'Slow down a little.',
 };
 
 /**

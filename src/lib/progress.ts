@@ -252,13 +252,6 @@ class ProgressStore {
     }
   }
 
-  /** Developer: about half of everything unlocked (only while the server's dev tools switch is on). */
-  async devSimulateHalf(): Promise<string | null> {
-    const { error } = await supabase.rpc('dev_simulate_progress');
-    if (error) return error.message.includes('off') ? 'Developer tools are turned off on the server.' : "Couldn't simulate progress.";
-    await this.refresh();
-    return null;
-  }
   /** Developer: start XP, achievements, challenges and streaks over for this player. */
   async devResetProgress(): Promise<string | null> {
     const { error } = await supabase.rpc('reset_my_progress');

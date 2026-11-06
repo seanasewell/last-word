@@ -312,7 +312,7 @@ export function FinalResults({ s: g }: { s: GameState }) {
     <View style={{ flex: 1 }}>
       <PageScroll gold>
         <FadeUp style={{ alignItems: 'center', paddingTop: 20 }}>
-          <Text style={{ fontSize: 44, marginBottom: -6, marginTop: -8, zIndex: 2 }}>👑</Text>
+          <Text style={{ fontSize: 44, marginBottom: -18, marginTop: 4, zIndex: 2 }}>👑</Text>
           <Avatar player={winner} size={104} ring />
           <Text style={[s.h1, { fontSize: 30, textAlign: 'center', marginTop: 18 }]}>{youWon ? 'You got the last word!' : `${winner.name} got the last word`}</Text>
         </FadeUp>
@@ -322,9 +322,9 @@ export function FinalResults({ s: g }: { s: GameState }) {
           </View>
         )}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: youWon ? 12 : 22 }}>
-          <Stat label="Match score" value={total} color={C.amber} />
-          <Stat label="Words found" value={winner.stats.wordsFound} />
-          <Stat label="XP earned" value={xpEarned} color={C.sky} />
+          <Stat compact label="Match score" value={total} color={C.amber} />
+          <Stat compact label="Words found" value={winner.stats.wordsFound} />
+          <Stat compact label="XP earned" value={xpEarned} color={C.sky} />
         </View>
         <View style={{ marginTop: 8, flexDirection: 'row' }}>
           <Stat label="Longest word" value={winner.stats.longestWord ? winner.stats.longestWord.toUpperCase() : '—'} />

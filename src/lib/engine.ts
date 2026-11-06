@@ -343,6 +343,7 @@ export class GameEngine {
     const accepting = s.accepting && !!player && player.status === 'active' && Date.now() < s.roundEndsAt;
     const result = validateSubmission(raw, this.srcCounts, used, accepting, this.banned);
     if (!result.ok) return result;
+    if (this.solo && playerId === HUMAN_ID && this.tooFast()) return { ok: false, reason: 'too-fast', word: result.word };
 
     used.add(result.word); // synchronous → rapid repeats can't double-score
     this.used.set(playerId, used);
@@ -689,6 +690,19 @@ export class GameEngine {
     return next;
   }
 
+  /**
+   * Server-played games cap how fast words can score (anti-cheat: 4 in 2s, 20 in 15s).
+   * Check a little more strictly here so a fast typist sees "Slow down" instead of losing points.
+   */
+  private acceptedAt: number[] = [];
+  private tooFast(): boolean {
+    const now = Date.now();
+    this.acceptedAt = this.acceptedAt.filter((t) => now - t < 16_000);
+    if (this.acceptedAt.filter((t) => now - t < 2_200).length >= 4 || this.acceptedAt.length >= 20) return true;
+    this.acceptedAt.push(now);
+    return false;
+  }
+
   private submitOnline(o: Online, raw: string): Validation {
     const s = this.state;
     const me = s.players.find((p) => p.id === HUMAN_ID);
@@ -696,6 +710,7 @@ export class GameEngine {
     const used = new Set(me?.roundWords.map((x) => x.word));
     const result = validateSubmission(raw, this.srcCounts, used, accepting, this.banned);
     if (!result.ok) return result;
+    if (this.tooFast()) return { ok: false, reason: 'too-fast', word: result.word };
     // Count it right away; the server confirms (or takes it back) a moment later.
     o.extras.set(result.word, { word: result.word, points: result.points, at: Date.now() - s.roundStartedAt });
     o.queue.push(result.word);

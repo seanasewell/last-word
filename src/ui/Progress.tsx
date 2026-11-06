@@ -2,13 +2,13 @@
 // Same design as the web prototype: a Rewards tab with the level card, streak,
 // daily and weekly challenges and the achievement grid; a level badge drawn as
 // a turning sphere; a level-up pop-up after a game; "How leveling works".
-import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
-  Easing, useAnimatedProps, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming, ZoomIn,
+  Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming, ZoomIn,
 } from 'react-native-reanimated';
-import Svg, { Circle, Defs, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
+import MaskedViewBase from '@react-native-masked-view/masked-view';
+import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 
 import {
   ACHIEVEMENT_GROUPS, ACHIEVEMENTS, DAILY, DAILY_BONUS, WEEKLY, WEEKLY_BONUS,
@@ -63,69 +63,27 @@ const TIER_COLORS: [string, string, string, string, string, string][] = [
 ];
 const SPOTS: [string, string, string][] = [['22%', '18%', '55%'], ['85%', '25%', '50%'], ['78%', '88%', '60%'], ['12%', '85%', '55%']];
 
-/**
- * The level circle, drawn as a sphere turning left and right: the outline stays
- * round while the colors and the number slide across the face (the number
- * narrows near the edges), under a fixed light from the top left.
- */
+/** The level circle: a flat circle filled with the title's mesh colors and a white level number. */
 export function LevelBadge({ level, size }: { level: number; size: number }) {
   const tier = tierFor(level);
   const col = TIER_COLORS[tier];
-  const reduce = useReducedMotion();
-  const t = useSharedValue(0.5);
-  useEffect(() => {
-    if (reduce) return;
-    t.set(0);
-    t.set(withRepeat(withTiming(1, { duration: 4800, easing: Easing.inOut(Easing.sin) }), -1, true));
-  }, [reduce, t]);
-  const mesh = useAnimatedStyle(() => ({ transform: [{ translateX: (0.1 - 0.2 * t.value) * size * 1.6 }] }));
-  const sheen = useAnimatedStyle(() => ({ transform: [{ translateX: (0.8 - 1.6 * t.value) * size }] }));
-  const num = useAnimatedStyle(() => {
-    const x = t.value * 2 - 1; // -1 … 1
-    return { transform: [{ translateX: x * size * 0.16 }, { scaleX: 1 - 0.16 * Math.abs(x) }] };
-  });
-  const big = size * 1.6;
   const id = `lb${tier}`;
   return (
-    <View accessibilityLabel={`Level ${level}`} style={{ width: size, height: size, borderRadius: size / 2, shadowColor: col[5], shadowOpacity: 0.7, shadowRadius: size / 6, shadowOffset: { width: 0, height: size / 10 } }}>
-      <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', borderWidth: tier === 8 ? 1.5 : 0, borderColor: w(0.16) }}>
-        <Animated.View style={[{ position: 'absolute', left: -size * 0.3, top: -size * 0.3, width: big, height: big }, mesh]}>
-          <Svg width={big} height={big}>
-            <Defs>
-              {SPOTS.map(([cx, cy, r], i) => (
-                <RadialGradient key={i} id={`${id}-${i}`} cx={cx} cy={cy} r={r} fx={cx} fy={cy}>
-                  <Stop offset="0" stopColor={col[i + 1]} stopOpacity={1} />
-                  <Stop offset="1" stopColor={col[i + 1]} stopOpacity={0} />
-                </RadialGradient>
-              ))}
-            </Defs>
-            <Rect width={big} height={big} fill={col[0]} />
-            {SPOTS.map((_, i) => <Rect key={i} width={big} height={big} fill={`url(#${id}-${i})`} />)}
-          </Svg>
-        </Animated.View>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, sheen]}>
-          <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.1)', 'rgba(255,255,255,0.26)', 'rgba(255,255,255,0.1)', 'rgba(255,255,255,0)']}
-            start={{ x: 0, y: 0.4 }} end={{ x: 1, y: 0.6 }} style={StyleSheet.absoluteFill} />
-        </Animated.View>
-        <Svg width={size} height={size} style={StyleSheet.absoluteFill} pointerEvents="none">
-          <Defs>
-            <RadialGradient id="hl" cx="32%" cy="26%" r="34%" fx="32%" fy="26%">
-              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.45} />
-              <Stop offset="0.53" stopColor="#FFFFFF" stopOpacity={0.12} />
-              <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
+    <View accessibilityLabel={`Level ${level}`} style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', borderWidth: tier === 8 ? 1.5 : 0, borderColor: w(0.16) }}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Defs>
+          {SPOTS.map(([cx, cy, r], i) => (
+            <RadialGradient key={i} id={`${id}-${i}`} cx={cx} cy={cy} r={r} fx={cx} fy={cy}>
+              <Stop offset="0" stopColor={col[i + 1]} stopOpacity={1} />
+              <Stop offset="1" stopColor={col[i + 1]} stopOpacity={0} />
             </RadialGradient>
-            <RadialGradient id="edge" cx="50%" cy="50%" r="50%">
-              <Stop offset="0.52" stopColor="#000000" stopOpacity={0} />
-              <Stop offset="0.78" stopColor="#000000" stopOpacity={0.18} />
-              <Stop offset="1" stopColor="#000000" stopOpacity={0.42} />
-            </RadialGradient>
-          </Defs>
-          <Circle cx={size / 2} cy={size / 2} r={size / 2} fill="url(#hl)" />
-          <Circle cx={size / 2} cy={size / 2} r={size / 2} fill="url(#edge)" />
-        </Svg>
-        <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-          <Animated.Text style={[{ fontFamily: F.display, fontSize: size * (level >= 100 ? 0.34 : 0.4), color: C.white, textShadowColor: 'rgba(0,0,0,0.3)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 1 }, includeFontPadding: false }, s.tabular, num]}>{level}</Animated.Text>
-        </View>
+          ))}
+        </Defs>
+        <Circle cx={size / 2} cy={size / 2} r={size / 2} fill={col[0]} />
+        {SPOTS.map((_, i) => <Circle key={i} cx={size / 2} cy={size / 2} r={size / 2} fill={`url(#${id}-${i})`} />)}
+      </Svg>
+      <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+        <Text style={[{ fontFamily: F.display, fontSize: size * (level >= 100 ? 0.34 : 0.4), color: C.white, textShadowColor: 'rgba(0,0,0,0.3)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 1 }, includeFontPadding: false }, s.tabular]}>{level}</Text>
       </View>
     </View>
   );
@@ -241,23 +199,6 @@ function WeeklyChallenges() {
 }
 
 // ── Streak ─────────────────────────────────────────────────────────────────
-function GoldMesh({ size }: { size: number }) {
-  return (
-    <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-      <Defs>
-        {[['22%', '18%', '55%', '#FFE7B0'], ['85%', '25%', '50%', '#FFD06B'], ['78%', '88%', '60%', '#C27412'], ['12%', '85%', '55%', '#E0901F']].map(([cx, cy, r, c], i) => (
-          <RadialGradient key={i} id={`gm${i}`} cx={cx} cy={cy} r={r} fx={cx} fy={cy}>
-            <Stop offset="0" stopColor={c} stopOpacity={1} />
-            <Stop offset="1" stopColor={c} stopOpacity={0} />
-          </RadialGradient>
-        ))}
-      </Defs>
-      <Circle cx={size / 2} cy={size / 2} r={size / 2} fill="#FFB547" />
-      {[0, 1, 2, 3].map((i) => <Circle key={i} cx={size / 2} cy={size / 2} r={size / 2} fill={`url(#gm${i})`} />)}
-    </Svg>
-  );
-}
-
 function StreakCard() {
   const p = useProgress();
   const current = p.streak.current;
@@ -274,22 +215,21 @@ function StreakCard() {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <View>
           <Text style={s.eyebrow}>Current streak</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
             <Icon e="🔥" size={24} />
             <Text style={[{ fontFamily: F.displayBold, fontSize: 24, color: C.white }, s.tabular]}>{current} {current === 1 ? 'day' : 'days'}</Text>
           </View>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={s.eyebrow}>Personal best</Text>
-          <Text style={[{ fontFamily: F.displayBold, fontSize: 18, color: C.amber, marginTop: 4 }, s.tabular]}>{p.streak.best} {p.streak.best === 1 ? 'day' : 'days'}</Text>
+          <Text style={[{ fontFamily: F.displayBold, fontSize: 24, color: C.amber, marginTop: 4 }, s.tabular]}>{p.streak.best} {p.streak.best === 1 ? 'day' : 'days'}</Text>
         </View>
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
         {days.map((d) => (
           <View key={d.key} style={{ alignItems: 'center', gap: 6 }}>
-            <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: d.played ? 0 : d.today ? 2 : 1, borderColor: d.today ? C.primary : w(0.15) }}>
-              {d.played && <GoldMesh size={36} />}
-              <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.goldText }}>{d.played ? '✓' : ''}</Text>
+            <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: !d.played && d.today ? 2 : 1, borderColor: !d.played && d.today ? C.primary : w(0.15) }}>
+              {d.played && <Text style={{ fontSize: 16, lineHeight: 20 }}>🔥</Text>}
             </View>
             <Text style={{ fontFamily: F.bodySemi, fontSize: 11, color: d.today ? C.white : w(0.55) }}>{d.label}</Text>
           </View>
@@ -330,7 +270,7 @@ function Badge({ v, size = 60 }: { v: AchievementView; size?: number }) {
 
 function CheckCircle() {
   return (
-    <View style={{ position: 'absolute', right: 8, top: 8, width: 22, height: 22, borderRadius: 11, shadowColor: DONE, shadowOpacity: 0.9, shadowRadius: 6 }}>
+    <View style={{ position: 'absolute', right: 8, top: 8, width: 22, height: 22, borderRadius: 11, shadowColor: DONE, shadowOpacity: 0.4, shadowRadius: 3 }}>
       <Svg width={22} height={22} viewBox="0 0 24 24">
         <Circle cx={12} cy={12} r={12} fill={DONE} />
         <Path d="M7.4 12.3 10.6 15.4 16.6 9" fill="none" stroke="#FFFFFF" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
@@ -527,10 +467,47 @@ export function LevelingGuide() {
 }
 
 // ── Elimination match card border ──────────────────────────────────────────
-const AnimatedRect = Animated.createAnimatedComponent(Rect);
+// Same look as the web version: a color sweep (blue → sky → white → mint)
+// turns slowly behind the card and only shows through the 2px border ring.
+const SWEEP_STOPS: [number, [number, number, number, number]][] = [
+  [0, [61, 139, 255, 0.45]], [200, [61, 139, 255, 0.45]], [270, [92, 200, 255, 1]],
+  [312, [255, 255, 255, 1]], [334, [62, 230, 184, 1]], [360, [61, 139, 255, 0.45]],
+];
+function sweepColor(deg: number) {
+  for (let i = 1; i < SWEEP_STOPS.length; i++) {
+    const [a, ca] = SWEEP_STOPS[i - 1];
+    const [b, cb] = SWEEP_STOPS[i];
+    if (deg <= b) {
+      const k = (deg - a) / (b - a);
+      const m = (x: number, y: number) => x + (y - x) * k;
+      return `rgba(${Math.round(m(ca[0], cb[0]))},${Math.round(m(ca[1], cb[1]))},${Math.round(m(ca[2], cb[2]))},${m(ca[3], cb[3]).toFixed(3)})`;
+    }
+  }
+  return 'rgba(61,139,255,0.45)';
+}
 
-/** A bright highlight that travels around a rounded card's border, slowly and forever. */
-export function SweepBorder({ radius = 24 }: { radius?: number }) {
+/** A conic gradient drawn as thin wedges (SVG has no conic gradient). */
+function ConicDisc({ size }: { size: number }) {
+  const r = size / 2;
+  const n = 120;
+  const wedges = Array.from({ length: n }, (_, i) => {
+    const a0 = (i / n) * 2 * Math.PI - Math.PI / 2;
+    const a1 = ((i + 1.15) / n) * 2 * Math.PI - Math.PI / 2; // slight overlap hides seams
+    const p = (a: number) => `${r + r * Math.cos(a)} ${r + r * Math.sin(a)}`;
+    return { d: `M ${r} ${r} L ${p(a0)} A ${r} ${r} 0 0 1 ${p(a1)} Z`, fill: sweepColor(((i + 0.5) / n) * 360) };
+  });
+  return (
+    <Svg width={size} height={size}>
+      {wedges.map((x, i) => <Path key={i} d={x.d} fill={x.fill} />)}
+    </Svg>
+  );
+}
+
+const ConicMemo = React.memo(ConicDisc);
+// The package's class typings predate React 19's JSX types; the component itself works as usual.
+const MaskedView = MaskedViewBase as unknown as React.ComponentType<{ style?: StyleProp<ViewStyle>; maskElement: React.ReactElement; children?: React.ReactNode }>;
+
+export function SweepBorder({ radius = 24, width = 2 }: { radius?: number; width?: number }) {
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   const reduce = useReducedMotion();
   const t = useSharedValue(0);
@@ -538,24 +515,27 @@ export function SweepBorder({ radius = 24 }: { radius?: number }) {
     if (reduce) return;
     t.set(withRepeat(withTiming(1, { duration: 4500, easing: Easing.linear }), -1, false));
   }, [reduce, t]);
-  const sw = 2;
-  const perim = box ? 2 * (box.w - sw - 2 * (radius - sw / 2)) + 2 * (box.h - sw - 2 * (radius - sw / 2)) + 2 * Math.PI * (radius - sw / 2) : 0;
-  const glow = useAnimatedProps(() => ({ strokeDashoffset: -t.value * perim }));
-  const core = useAnimatedProps(() => ({ strokeDashoffset: -t.value * perim - perim * 0.05 }));
+  const spin = useAnimatedStyle(() => ({ transform: [{ rotate: `${t.value * 360}deg` }] }));
   const onLayout = (e: LayoutChangeEvent) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height });
+  const disc = box ? Math.ceil(Math.hypot(box.w, box.h)) + 4 : 0;
+  const ring = box
+    ? `${roundedRect(0, 0, box.w, box.h, radius)} ${roundedRect(width, width, box.w - width * 2, box.h - width * 2, radius - width)}`
+    : '';
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={onLayout}>
       {box && (
-        <Svg width={box.w} height={box.h}>
-          <Rect x={sw / 2} y={sw / 2} width={box.w - sw} height={box.h - sw} rx={radius - sw / 2} fill="none" stroke="rgba(61,139,255,0.45)" strokeWidth={sw} />
-          <AnimatedRect x={sw / 2} y={sw / 2} width={box.w - sw} height={box.h - sw} rx={radius - sw / 2} fill="none" stroke={C.sky} strokeOpacity={0.8}
-            strokeWidth={sw} strokeLinecap="round" strokeDasharray={[perim * 0.22, perim * 0.78]} animatedProps={glow} />
-          <AnimatedRect x={sw / 2} y={sw / 2} width={box.w - sw} height={box.h - sw} rx={radius - sw / 2} fill="none" stroke="#FFFFFF"
-            strokeWidth={sw + 0.5} strokeLinecap="round" strokeDasharray={[perim * 0.07, perim * 0.93]} animatedProps={core} />
-          <AnimatedRect x={sw / 2} y={sw / 2} width={box.w - sw} height={box.h - sw} rx={radius - sw / 2} fill="none" stroke={C.mint} strokeOpacity={0.9}
-            strokeWidth={sw} strokeLinecap="round" strokeDasharray={[perim * 0.04, perim * 0.96]} animatedProps={glow} />
-        </Svg>
+        <MaskedView style={StyleSheet.absoluteFill} maskElement={
+          <Svg width={box.w} height={box.h}><Path d={ring} fill="#000" fillRule="evenodd" /></Svg>
+        }>
+          <Animated.View style={[{ position: 'absolute', width: disc, height: disc, left: (box.w - disc) / 2, top: (box.h - disc) / 2 }, spin]}>
+            <ConicMemo size={disc} />
+          </Animated.View>
+        </MaskedView>
       )}
     </View>
   );
+}
+
+function roundedRect(x: number, y: number, wd: number, ht: number, r: number) {
+  return `M ${x + r} ${y} H ${x + wd - r} A ${r} ${r} 0 0 1 ${x + wd} ${y + r} V ${y + ht - r} A ${r} ${r} 0 0 1 ${x + wd - r} ${y + ht} H ${x + r} A ${r} ${r} 0 0 1 ${x} ${y + ht - r} V ${y + r} A ${r} ${r} 0 0 1 ${x + r} ${y} Z`;
 }

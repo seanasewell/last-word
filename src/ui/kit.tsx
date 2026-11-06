@@ -199,10 +199,10 @@ export function Card({ children, style }: { children: React.ReactNode; style?: S
   return <View style={[s.card, style]}>{children}</View>;
 }
 
-export function Stat({ label, value, color = C.white }: { label: string; value: React.ReactNode; color?: string }) {
+export function Stat({ label, value, color = C.white, compact = false }: { label: string; value: React.ReactNode; color?: string; compact?: boolean }) {
   return (
-    <Card style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}>
-      <Text style={s.eyebrow}>{label}</Text>
+    <Card style={{ flex: 1, paddingHorizontal: compact ? 12 : 16, paddingVertical: 12 }}>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[s.eyebrow, compact && { letterSpacing: 0.8 }]}>{label}</Text>
       <Text style={{ fontFamily: F.displayBold, fontSize: 20, color, marginTop: 2 }}>{value}</Text>
     </Card>
   );
