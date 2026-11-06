@@ -6,7 +6,7 @@ import { Image, Pressable, Text, View } from 'react-native';
 import { accounts, type Account } from '@/lib/account';
 import { kv } from '@/lib/kv';
 import { canUseApple, type Provider, type SocialResult } from '@/lib/social';
-import { Button, Card, s, Sheet } from './kit';
+import { Button, Card, FadeUp, s, Sheet } from './kit';
 import { C, F, w } from './theme';
 
 export const PROVIDER_NAME: Record<Provider, string> = { apple: 'Apple', google: 'Google' };
@@ -130,6 +130,10 @@ export function SaveProgressNudge({ account }: { account: Account }) {
   const [openedAt] = useState(() => Date.now());
   if (account.provider || account.matchesPlayed < 1) return null;
   if (openedAt - hiddenAt < NUDGE_DAYS * 864e5) return null;
-  return <SaveProgressCard onDismiss={() => { const t = Date.now(); kv.set(key, String(t)); setHiddenAt(t); }} />;
+  return (
+    <FadeUp delay={90} style={{ marginTop: 12 }}>
+      <SaveProgressCard onDismiss={() => { const t = Date.now(); kv.set(key, String(t)); setHiddenAt(t); }} />
+    </FadeUp>
+  );
 }
 

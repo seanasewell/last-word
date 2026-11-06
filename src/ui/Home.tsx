@@ -69,13 +69,16 @@ function FullWidthLogo() {
   return <TileLogo size={size} />;
 }
 
+/** The elimination card's see-through blue as it looks over the screen's background, for the avatar rings. */
+const MATCH_CARD_BLUE = '#11274D';
+
 function PlayTab({ best, account }: { best: number; account: Account }) {
   return (
     <View>
       <View style={{ paddingTop: 36 }}><FullWidthLogo /></View>
 
       <FadeUp delay={60} style={{ marginTop: 24 }}><LevelCard /></FadeUp>
-      <FadeUp delay={90} style={{ marginTop: 12 }}><SaveProgressNudge account={account} /></FadeUp>
+      <SaveProgressNudge account={account} />
 
       <FadeUp delay={120} style={{ marginTop: 12, gap: 12 }}>
         <Pressable onPress={() => engine.startMatch()} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
@@ -84,7 +87,7 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: F.displayBold, fontSize: 24, color: C.white }}>Elimination match</Text>
               <View style={{ flexDirection: 'row' }}>
-                {MATCH_FACES.map((src, i) => <Image key={i} source={src} style={{ width: 26, height: 26, borderRadius: 13, marginLeft: i ? -8 : 0, borderWidth: 2, borderColor: C.bg }} />)}
+                {MATCH_FACES.map((src, i) => <Image key={i} source={src} style={{ width: 26, height: 26, borderRadius: 13, marginLeft: i ? -8 : 0, borderWidth: 2, borderColor: MATCH_CARD_BLUE }} />)}
               </View>
             </View>
             <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>6 players · 5 rounds · 60 seconds each. Lowest score each round is out.</Text>
