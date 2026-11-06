@@ -27,7 +27,7 @@ import { planBotRound, type PlannedSubmission } from './bots';
 
 export type Mode = 'single' | 'multi';
 export type Phase =
-  | 'menu' | 'sp-playing' | 'sp-results'
+  | 'menu' | 'sp-countdown' | 'sp-playing' | 'sp-results'
   | 'lobby' | 'prematch' | 'round' | 'elimination' | 'final';
 
 export const SINGLE_DURATION = 60_000;
@@ -214,8 +214,10 @@ export class GameEngine {
       mode: 'single', matchId: newId(), round: 1, usedSources: this.lastSingleSource ? [this.lastSingleSource] : [],
       players: [human], winnerId: null, lastElimination: null, spectating: false,
       awaitingChoice: false, newBest: false, missedLongest: [],
+      // A short 3-2-1 before the word appears, so the player can get ready.
+      phase: 'sp-countdown', source: '', accepting: false, prematchEndsAt: Date.now() + PREMATCH,
     });
-    this.beginRound();
+    this.after(PREMATCH, () => this.beginRound());
   }
 
   /** Find an online match; falls back to a local one when that isn't possible. */

@@ -1,11 +1,11 @@
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming, ZoomIn } from 'react-native-reanimated';
+import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withTiming, ZoomIn } from 'react-native-reanimated';
 
 import { engine, HUMAN_ID, TOTAL_ROUNDS, type GameState } from '@/lib/engine';
 import type { Player } from '@/lib/players';
-import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Stat, Tile, useAnimatedNumber, useNow, BotBadge, isBot } from './kit';
+import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Stat, Tile, useAnimatedNumber, useCountdown, BotBadge, isBot } from './kit';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { sfx } from './sound';
 import { C, F, w } from './theme';
@@ -46,20 +46,43 @@ const Row = ({ p, right, sub, highlight, out, rank, onPress }: { p: Player; righ
 
 const num = (n: number | string, color = C.white) => <Text style={[{ fontFamily: F.display, fontSize: 16, color, minWidth: 44, textAlign: 'right' }, s.tabular]}>{n}</Text>;
 
+// ── 3-2-1 countdown ────────────────────────────────────────────────────────
+/** A big number that counts down to `endsAt`: full white, with a quick, smooth pop on each second. */
+function BigCountdown({ endsAt, title, sub = 'Get your fingers ready' }: { endsAt: number; title: string; sub?: string }) {
+  const count = Math.max(1, useCountdown(endsAt));
+  const scale = useSharedValue(1);
+  useEffect(() => {
+    scale.set(1.35);
+    scale.set(withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }));
+    Haptics.selectionAsync().catch(() => {});
+    sfx.tick();
+  }, [count, scale]);
+  const pop = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Text style={[s.eyebrow, { fontSize: 13, letterSpacing: 2.4 }]}>{title}</Text>
+      <Animated.Text accessibilityLabel={`${count}`} style={[{ fontFamily: F.display, fontSize: 120, color: C.white, opacity: 1 }, s.tabular, pop]}>{count}</Animated.Text>
+      <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.8) }}>{sub}</Text>
+    </View>
+  );
+}
+
+// ── Solo challenge countdown ───────────────────────────────────────────────
+export function SoloCountdown({ s: g }: { s: GameState }) {
+  return (
+    <Screen>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 40 }}>
+        <BigCountdown endsAt={g.prematchEndsAt} title="Solo challenge" sub="60 seconds · find as many words as you can" />
+      </View>
+      <Button title="Cancel" variant="ghost" onPress={() => engine.goMenu()} />
+    </Screen>
+  );
+}
+
 // ── Lobby + pre-match countdown ────────────────────────────────────────────
 export function Lobby({ s: g }: { s: GameState }) {
   const filled = g.lobbyFilled;
   const full = filled >= 6;
-  const now = useNow(g.phase === 'prematch', 100);
-  const count = Math.max(1, Math.ceil((g.prematchEndsAt - now) / 1000));
-  const pop = useSharedValue(0);
-  useEffect(() => {
-    if (g.phase !== 'prematch') return;
-    pop.set(0);
-    pop.set(withSpring(1, { damping: 9 }));
-    Haptics.selectionAsync().catch(() => {});
-    sfx.tick();
-  }, [count, g.phase, pop]);
   // Each new player joining the lobby gets a small pop.
   useEffect(() => {
     if (filled > 1) {
@@ -67,7 +90,6 @@ export function Lobby({ s: g }: { s: GameState }) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
   }, [filled]);
-  const popStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, pop.value), transform: [{ scale: 2 - pop.value }] }));
   return (
     <Screen>
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 }}>
@@ -127,9 +149,7 @@ export function Lobby({ s: g }: { s: GameState }) {
       </ScrollView>
       {g.phase === 'prematch' && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,10,22,0.88)', alignItems: 'center', justifyContent: 'center' }]}>
-          <Text style={[s.eyebrow, { fontSize: 13, letterSpacing: 2.4 }]}>Round 1 starts in</Text>
-          <Animated.Text style={[{ fontFamily: F.display, fontSize: 120, color: C.white }, popStyle]}>{count}</Animated.Text>
-          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.7) }}>Get your fingers ready</Text>
+          <BigCountdown endsAt={g.prematchEndsAt} title="Round 1 starts in" />
         </View>
       )}
     </Screen>
@@ -143,8 +163,14 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
   const byId = new Map(g.players.map((p) => [p.id, p]));
   const out = byId.get(e.playerId)!;
   const me = byId.get(HUMAN_ID)!;
-  const now = useNow(g.nextRoundAt > 0, 250);
-  const secs = Math.max(0, Math.ceil((g.nextRoundAt - now) / 1000));
+  const secs = useCountdown(g.nextRoundAt, g.nextRoundAt > 0);
+  const tickPop = useSharedValue(1);
+  useEffect(() => {
+    if (secs <= 0) return;
+    tickPop.set(1.18);
+    tickPop.set(withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) }));
+  }, [secs, tickPop]);
+  const tickStyle = useAnimatedStyle(() => ({ transform: [{ scale: tickPop.value }] }));
   const nextRound = e.round + 1;
   const youOut = e.playerId === HUMAN_ID && g.awaitingChoice;
 
@@ -183,8 +209,8 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
           {remaining.map((p) => <Row key={p.id} p={p} onPress={actOn(p)} right={<Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65) }}>{p.totalScore} total</Text>} />)}
         </View>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 'auto', paddingTop: 24 }}>
-          <Button title="Main menu" variant="ghost" style={{ flex: 1 }} onPress={() => engine.goMenu()} />
-          <Button title="Spectate" style={{ flex: 1 }} onPress={() => engine.spectate()} />
+          <Button title="Back to lobby" variant="ghost" style={{ flex: 1 }} onPress={() => engine.goMenu()} />
+          <Button title="Play again" style={{ flex: 1 }} onPress={() => engine.startMatch()} />
         </View>
         {sheet}
       </PageScroll>
@@ -207,7 +233,7 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.7) }}>starts in</Text>
           <View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: 'rgba(61,139,255,0.55)', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={[{ fontFamily: F.display, fontSize: 20, color: C.white }, s.tabular]}>{secs}</Text>
+            <Animated.Text style={[{ fontFamily: F.display, fontSize: 20, color: C.white }, s.tabular, tickStyle]}>{secs}</Animated.Text>
           </View>
         </View>
       </View>
@@ -313,7 +339,7 @@ export function FinalResults({ s: g }: { s: GameState }) {
           ))}
         </View>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 'auto', paddingTop: 24 }}>
-          <Button title="Main menu" variant="ghost" style={{ flex: 1 }} onPress={() => engine.goMenu()} />
+          <Button title="Back to lobby" variant="ghost" style={{ flex: 1 }} onPress={() => engine.goMenu()} />
           <Button title="Play again" variant="gold" style={{ flex: 1 }} onPress={() => engine.startMatch()} />
         </View>
         {sheet}

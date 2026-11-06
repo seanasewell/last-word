@@ -27,6 +27,28 @@ export function useNow(active: boolean, ms = 250): number {
   return now;
 }
 
+/**
+ * Whole seconds left until `endsAt`, updated exactly as each second ticks
+ * over (not on a polling interval, which made the numbers step unevenly).
+ * Never jumps back up by one when an online match's clock estimate shifts.
+ */
+export function useCountdown(endsAt: number, active = true): number {
+  const [secs, setSecs] = useState(() => Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)));
+  useEffect(() => {
+    if (!active || !endsAt) return;
+    let t: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const left = endsAt - Date.now();
+      const next = Math.max(0, Math.ceil(left / 1000));
+      setSecs((prev) => (prev > 0 && next === prev + 1 ? prev : next));
+      if (left > 0) t = setTimeout(tick, (left % 1000 || 1000) + 10);
+    };
+    t = setTimeout(tick, 0);
+    return () => clearTimeout(t);
+  }, [endsAt, active]);
+  return secs;
+}
+
 /** Counts smoothly toward `value`. */
 export function useAnimatedNumber(value: number, duration = 450): number {
   const [shown, setShown] = useState(value);

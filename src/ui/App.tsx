@@ -8,7 +8,7 @@ import { AuthFlow, Onboarding } from './Auth';
 import { GameScreen } from './GameScreen';
 import { Home } from './Home';
 import { useAuth, useGame } from './kit';
-import { EliminationScreen, FinalResults, Lobby, SoloResults } from './Screens';
+import { EliminationScreen, FinalResults, Lobby, SoloCountdown, SoloResults } from './Screens';
 
 /** Screen flow for the whole app: sign-in, onboarding, then the game's phases. */
 export function LastWordApp() {
@@ -49,6 +49,7 @@ export function LastWordApp() {
   else {
     switch (g.phase) {
       case 'menu': key = 'home'; screen = <Home s={g} account={a} />; break;
+      case 'sp-countdown': key = `sp-count-${g.matchId}`; screen = <SoloCountdown s={g} />; break;
       case 'sp-playing':
       case 'round': key = `game-${g.matchId}-${g.round}`; screen = <GameScreen s={g} />; break;
       case 'sp-results': key = 'sp-results'; screen = <SoloResults s={g} />; break;
