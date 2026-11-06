@@ -123,7 +123,8 @@ export function Tile({ ch, size, gold = false, delay = 0, animate = true }: { ch
 export function TileLogo({ size = 36, animate = true }: { size?: number; animate?: boolean }) {
   let i = 0;
   return (
-    <View accessibilityRole="image" accessibilityLabel="Last word" style={{ flexDirection: 'row', justifyContent: 'center', gap: size * 0.32 }}>
+    // One even gap between all eight tiles (no wider space between the words).
+    <View accessibilityRole="image" accessibilityLabel="Last word" style={{ flexDirection: 'row', justifyContent: 'center', gap: Math.max(2, Math.round(size * 0.13)) }}>
       {['LAST', 'WORD'].map((word) => (
         <View key={word} style={{ flexDirection: 'row', gap: Math.max(2, Math.round(size * 0.13)) }}>
           {word.split('').map((ch) => {
@@ -233,7 +234,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
     <Modal visible={open} transparent animationType="none" onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable accessibilityLabel="Close" onPress={onClose} style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.55)' }]} />
-        <Animated.View entering={SlideInDown.duration(260).easing(Easing.out(Easing.cubic))} style={{ backgroundColor: C.ink850, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, borderColor: w(0.1), paddingHorizontal: 20, paddingTop: 10, paddingBottom: 36, maxHeight: '85%' }}>
+        <Animated.View entering={SlideInDown.duration(260).easing(Easing.out(Easing.cubic))} style={{ backgroundColor: C.ink850, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, borderColor: w(0.1), paddingHorizontal: 12, paddingTop: 10, paddingBottom: 36, maxHeight: '85%' }}>
           <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: w(0.2), marginBottom: 16 }} />
           {title && <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white, marginBottom: 12 }}>{title}</Text>}
           {children}

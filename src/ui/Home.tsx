@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,11 +13,12 @@ import { scoreWord } from '@/lib/words';
 import { cleanName, DevControls, NAME_MAX, nameError } from './Auth';
 import { Avatar, Button, Card, FadeUp, OptionSheet, ordinal, s, Screen, Sheet, TextField, TileLogo, Toggle, useNow } from './kit';
 import { pickPhoto } from './photo';
+import { DailyChallenges, LevelCard, LevelingGuide, RewardsTab, SweepBorder } from './Progress';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { onSoundChange, setSoundEnabled, soundEnabled } from './sound';
 import { C, F, w } from './theme';
 
-type Tab = 'play' | 'ranks' | 'profile';
+type Tab = 'play' | 'ranks' | 'rewards' | 'profile';
 let rememberedTab: Tab = 'play';
 let rememberedFor = '';
 
@@ -28,6 +29,7 @@ function TabBar({ tab, onChange, account }: { tab: Tab; onChange: (t: Tab) => vo
   const items: { id: Tab; label: string; emoji?: string }[] = [
     { id: 'play', label: 'Play', emoji: '🔤' },
     { id: 'ranks', label: 'Ranks', emoji: '🏆' },
+    { id: 'rewards', label: 'Rewards', emoji: '🏅' },
     { id: 'profile', label: 'Profile' },
   ];
   return (
@@ -57,18 +59,26 @@ const MATCH_FACES = [
   require('@/assets/avatars/bot5.jpg'),
 ];
 
+/** The tile logo sized to span the screen, with 12px on each side. */
+function FullWidthLogo() {
+  const { width } = useWindowDimensions();
+  const avail = Math.min(width, 480) - 24;
+  const gap = Math.max(2, Math.round((avail / 8.91) * 0.13));
+  const size = Math.floor(((avail - 7 * gap) / 8) * 100) / 100;
+  return <TileLogo size={size} />;
+}
+
 function PlayTab({ best }: { best: number }) {
-  const [showScoring, setShowScoring] = useState(false);
   return (
     <View>
-      <View style={{ alignItems: 'center', paddingTop: 56 }}>
-        <TileLogo size={36} />
-        <FadeUp delay={480}><Text style={[s.body, { marginTop: 14, textAlign: 'center', maxWidth: 320 }]}>Rearrange the letters of one big word into as many small words as you can. Longer words score more points.</Text></FadeUp>
-      </View>
+      <View style={{ paddingTop: 36 }}><FullWidthLogo /></View>
 
-      <FadeUp delay={120} style={{ marginTop: 32, gap: 12 }}>
+      <FadeUp delay={60} style={{ marginTop: 24 }}><LevelCard /></FadeUp>
+
+      <FadeUp delay={120} style={{ marginTop: 12, gap: 12 }}>
         <Pressable onPress={() => engine.startMatch()} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
-          <View style={{ borderRadius: 24, borderWidth: 1.5, borderColor: 'rgba(92,158,255,0.7)', backgroundColor: 'rgba(8,20,40,0.92)', padding: 20 }}>
+          <View style={{ borderRadius: 24, backgroundColor: C.card, padding: 22 }}>
+            <SweepBorder radius={24} />
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: F.displayBold, fontSize: 24, color: C.white }}>Elimination match</Text>
               <View style={{ flexDirection: 'row' }}>
@@ -84,35 +94,37 @@ function PlayTab({ best }: { best: number }) {
 
         <Pressable onPress={() => engine.startSingle()} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
           <Card style={{ borderRadius: 24, padding: 20 }}>
-            <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white }}>Solo challenge</Text>
-            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>One word, 60 seconds. Beat your personal best.</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 12 }}>
-              <Text style={s.eyebrow}>Best</Text>
-              <Text style={[{ fontFamily: F.display, fontSize: 18, color: C.amber }, s.tabular]}>{best}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12 }}>
+              <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white }}>Solo challenge</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                <Text style={s.eyebrow}>Best</Text>
+                <Text style={[{ fontFamily: F.display, fontSize: 18, color: C.amber }, s.tabular]}>{best}</Text>
+              </View>
             </View>
+            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>60 second rounds. Try and beat your personal best.</Text>
           </Card>
         </Pressable>
-
-        <Pressable onPress={() => setShowScoring((x) => !x)} hitSlop={8} accessibilityRole="button" accessibilityState={{ expanded: showScoring }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 4 }}>
-          <Text style={{ fontSize: 16 }}>🤔</Text>
-          <Text style={{ fontFamily: F.bodySemi, fontSize: 16, color: w(0.7) }}>How scoring works</Text>
-          <Text style={{ fontFamily: F.bodySemi, fontSize: 16, color: w(0.7) }}>{showScoring ? '▾' : '▸'}</Text>
-        </Pressable>
-        {showScoring && (
-          <View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((n) => (
-                <View key={n} style={{ width: '18.4%', alignItems: 'center', paddingVertical: 6, borderRadius: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
-                  <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.65) }}>{n}{n === 11 ? '+' : ''} letters</Text>
-                  <Text style={{ fontFamily: F.displayBold, fontSize: 15, color: C.white }}>{scoreWord('x'.repeat(n))}</Text>
-                </View>
-              ))}
-            </View>
-            <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65), marginTop: 8, lineHeight: 17 }}>{"Each letter can be used as often as it appears in the source. The source word itself doesn't count. No proper nouns, abbreviations or hyphenated words."}</Text>
-          </View>
-        )}
       </FadeUp>
+
+      <FadeUp delay={180} style={{ marginTop: 28 }}><DailyChallenges /></FadeUp>
+    </View>
+  );
+}
+
+/** Points for each word length, shown from Profile → How scoring works. */
+function ScoringGuide() {
+  return (
+    <View>
+      <Text style={[s.body, { fontSize: 14 }]}>Longer words score more points.</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+        {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((n) => (
+          <View key={n} style={{ width: '18.4%', alignItems: 'center', paddingVertical: 6, borderRadius: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
+            <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.65) }}>{n}{n === 11 ? '+' : ''} letters</Text>
+            <Text style={{ fontFamily: F.displayBold, fontSize: 15, color: C.white }}>{scoreWord('x'.repeat(n))}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65), marginTop: 12, lineHeight: 17 }}>{"Each letter can be used as often as it appears in the source. The source word itself doesn't count. No proper nouns, abbreviations or hyphenated words."}</Text>
     </View>
   );
 }
@@ -278,7 +290,7 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
 function ProfileTab({ account, best }: { account: Account; best: number }) {
   const [name, setName] = useState(account.name);
   const [saved, setSaved] = useState(false);
-  const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'delete' | 'dev' | 'blocked'>(null);
+  const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'delete' | 'dev' | 'blocked' | 'scoring' | 'leveling'>(null);
   const [photoErr, setPhotoErr] = useState<string | null>(null);
   const [sound, setSound] = useState(soundEnabled);
   useEffect(() => onSoundChange(() => setSound(soundEnabled())), []);
@@ -361,19 +373,31 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
       <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Settings</Text>
       <View style={{ borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' }}>
         <View style={[row, { paddingVertical: 10 }]}>
-          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🔊 Sound effects</Text>
+          <MenuLabel emoji="🔊" text="Sound effects" />
           <Toggle on={sound} onChange={setSoundEnabled} label="Sound effects" />
         </View>
-        <Pressable onPress={() => setSheet('blocked')} style={row}>
-          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🚫 Blocked players</Text>
+        <Pressable onPress={() => setSheet('blocked')} style={[row, { borderBottomWidth: 0 }]}>
+          <MenuLabel emoji="🚫" text="Blocked players" />
+          <Text style={{ color: w(0.55) }}>›</Text>
+        </Pressable>
+      </View>
+
+      <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Help</Text>
+      <View style={{ borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' }}>
+        <Pressable onPress={() => setSheet('scoring')} style={row}>
+          <MenuLabel emoji="🤔" text="How scoring works" />
+          <Text style={{ color: w(0.55) }}>›</Text>
+        </Pressable>
+        <Pressable onPress={() => setSheet('leveling')} style={row}>
+          <MenuLabel emoji="⭐" text="How leveling works" />
           <Text style={{ color: w(0.55) }}>›</Text>
         </Pressable>
         <Pressable onPress={() => { void Linking.openURL(SUPPORT_URL); }} style={row}>
-          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>💬 Help and support</Text>
+          <MenuLabel emoji="💬" text="Help and support" />
           <Text style={{ color: w(0.55) }}>↗</Text>
         </Pressable>
         <Pressable onPress={() => { void Linking.openURL(PRIVACY_URL); }} style={[row, { borderBottomWidth: 0 }]}>
-          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🔒 Privacy policy</Text>
+          <MenuLabel emoji="🔒" text="Privacy policy" />
           <Text style={{ color: w(0.55) }}>↗</Text>
         </Pressable>
       </View>
@@ -382,7 +406,7 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         <>
           <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Developer</Text>
           <Pressable onPress={() => setSheet('dev')} style={{ flexDirection: 'row', justifyContent: 'space-between', borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 16, paddingVertical: 14 }}>
-            <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>🛠 Developer controls</Text>
+            <MenuLabel emoji="🛠" text="Developer controls" />
             <Text style={{ color: w(0.55) }}>›</Text>
           </Pressable>
         </>
@@ -394,6 +418,14 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         </Pressable>
       </View>
 
+      <Sheet open={sheet === 'scoring'} onClose={() => setSheet(null)} title="How scoring works">
+        <ScoringGuide />
+        <Button title="Close" variant="ghost" style={{ marginTop: 20 }} onPress={() => setSheet(null)} />
+      </Sheet>
+      <Sheet open={sheet === 'leveling'} onClose={() => setSheet(null)} title="How leveling works">
+        <LevelingGuide />
+        <Button title="Close" variant="ghost" style={{ marginTop: 12 }} onPress={() => setSheet(null)} />
+      </Sheet>
       <Sheet open={sheet === 'photo'} onClose={() => setSheet(null)} title="Profile photo">
         <View style={{ gap: 10 }}>
           <Button title="Choose from library" onPress={() => choose('library')} />
@@ -419,6 +451,14 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
     </View>
   );
 }
+
+/** A menu row's emoji and label, 8px apart. */
+const MenuLabel = ({ emoji, text }: { emoji: string; text: string }) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+    <Text style={{ fontSize: 14 }}>{emoji}</Text>
+    <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{text}</Text>
+  </View>
+);
 
 // ── Blocked players ────────────────────────────────────────────────────────
 function BlockedPlayers({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -466,11 +506,12 @@ export function Home({ s: g, account }: { s: GameState; account: Account }) {
   }, []);
   return (
     <Screen padBottom={false}>
-      <ScrollView key={tab} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }}
-        refreshControl={tab === 'play' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
+      <ScrollView key={tab} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 16, paddingBottom: 32 }}
+        refreshControl={tab === 'play' || tab === 'rewards' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
         <Animated.View entering={FadeIn.duration(200)}>
           {tab === 'play' && <PlayTab best={g.personalBest} />}
           {tab === 'ranks' && <RanksTab account={account} refreshKey={refreshKey} />}
+          {tab === 'rewards' && <RewardsTab />}
           {tab === 'profile' && <ProfileTab account={account} best={g.personalBest} />}
         </Animated.View>
       </ScrollView>

@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { accounts } from '@/lib/account';
+import { engine } from '@/lib/engine';
 import { nameAllowed } from '@/lib/nameFilter';
+import { progress } from '@/lib/progress';
 import { SHOW_DEV_TOOLS } from '@/lib/release';
 import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { AnimatedTileLogo } from './AnimatedLogo';
@@ -22,8 +24,8 @@ function Step({ children, footer }: { children: React.ReactNode; footer?: React.
   return (
     <Screen>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 8, paddingBottom: 16 }}>{children}</ScrollView>
-        {footer && <View style={{ paddingHorizontal: 24, paddingBottom: 12, gap: 10 }}>{footer}</View>}
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 16 }}>{children}</ScrollView>
+        {footer && <View style={{ paddingHorizontal: 12, paddingBottom: 12, gap: 10 }}>{footer}</View>}
       </KeyboardAvoidingView>
     </Screen>
   );
@@ -75,6 +77,12 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
             <DevRow title="Bot difficulty" sub={skill == null ? 'Loading…' : `${skill.toFixed(2)}× · goes up when you win, down when you're knocked out early. Tap to reset`}
               onPress={() => run(async () => { const err = await accounts.devResetBotSkill(); if (!err) setSkill(1); return err; }, false)}
               right={<Text style={{ fontFamily: F.display, color: C.mint }}>{skill == null ? '' : `${skill.toFixed(2)}×`}</Text>} />
+            <DevRow title="Jump to the championship round" sub="A 1v1 against a bot, as if you'd survived rounds 1–4. Played on this phone only; not counted toward ranks or XP"
+              onPress={() => { onClose(); engine.devStartChampionship(); }} right={<Text style={{ color: w(0.55) }}>→</Text>} />
+            <DevRow title="Simulate half of achievements unlocked" sub="Level 25, a 7-day streak and 30 of 59 achievements"
+              onPress={() => run(() => progress.devSimulateHalf())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
+            <DevRow title="Reset XP and achievements" sub="Back to level 1 with nothing unlocked. Ranks and wins are kept"
+              onPress={() => run(() => progress.devResetProgress())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
             <DevRow title="Restart onboarding" sub="Clears name, photo and region for this account" onPress={() => run(() => accounts.devRestartOnboarding())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
           </>
         )}
@@ -120,10 +128,10 @@ export function AuthFlow() {
 
   return (
     <Screen>
-      <View style={{ flex: 1, paddingHorizontal: 24 }}>
+      <View style={{ flex: 1, paddingHorizontal: 12 }}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 40 }}>
           <AnimatedTileLogo size={38} />
-          <FadeUp delay={450}><Text style={[s.body, { textAlign: 'center', marginTop: 14, maxWidth: 300 }]}>{"The addicting word game where you find words within a word. It's really that easy."}</Text></FadeUp>
+          <FadeUp delay={450}><Text style={[s.body, { textAlign: 'center', marginTop: 14, maxWidth: 300 }]}>{'The simple but addicting game where you find words within a word.'}</Text></FadeUp>
         </View>
         <View style={{ gap: 10, paddingBottom: 8 }}>
           <Captcha ref={captcha} onToken={onToken} onError={onCaptchaError} />

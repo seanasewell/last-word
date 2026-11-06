@@ -1,19 +1,21 @@
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withTiming, ZoomIn } from 'react-native-reanimated';
+import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming, ZoomIn } from 'react-native-reanimated';
 
 import { engine, HUMAN_ID, TOTAL_ROUNDS, type GameState } from '@/lib/engine';
 import type { Player } from '@/lib/players';
 import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Stat, Tile, useAnimatedNumber, useCountdown, BotBadge, isBot } from './kit';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
+import { ProgressHint, XpChip, afterCelebration, usePendingXp } from './Progress';
+import { ShareButton } from './Share';
 import { sfx } from './sound';
 import { C, F, w } from './theme';
 
 function PageScroll({ children, gold = false }: { children: React.ReactNode; gold?: boolean }) {
   return (
     <Screen gold={gold}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 }}>{children}</ScrollView>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 20 }}>{children}</ScrollView>
     </Screen>
   );
 }
@@ -48,7 +50,7 @@ const num = (n: number | string, color = C.white) => <Text style={[{ fontFamily:
 
 // ── 3-2-1 countdown ────────────────────────────────────────────────────────
 /** A big number that counts down to `endsAt`: full white, with a quick, smooth pop on each second. */
-function BigCountdown({ endsAt, title, sub = 'Get your fingers ready' }: { endsAt: number; title: string; sub?: string }) {
+function BigCountdown({ endsAt, title = '', sub = 'Get your fingers ready' }: { endsAt: number; title?: string; sub?: string }) {
   const count = Math.max(1, useCountdown(endsAt));
   const scale = useSharedValue(1);
   useEffect(() => {
@@ -60,9 +62,9 @@ function BigCountdown({ endsAt, title, sub = 'Get your fingers ready' }: { endsA
   const pop = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
     <View style={{ alignItems: 'center' }}>
-      <Text style={[s.eyebrow, { fontSize: 13, letterSpacing: 2.4 }]}>{title}</Text>
+      {title ? <Text style={[s.eyebrow, { fontSize: 13, letterSpacing: 2.4 }]}>{title}</Text> : null}
       <Animated.Text accessibilityLabel={`${count}`} style={[{ fontFamily: F.display, fontSize: 120, color: C.white, opacity: 1 }, s.tabular, pop]}>{count}</Animated.Text>
-      <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.8) }}>{sub}</Text>
+      {sub ? <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.8) }}>{sub}</Text> : null}
     </View>
   );
 }
@@ -72,12 +74,27 @@ export function SoloCountdown({ s: g }: { s: GameState }) {
   return (
     <Screen>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 40 }}>
-        <BigCountdown endsAt={g.prematchEndsAt} title="Solo challenge" sub="60 seconds · find as many words as you can" />
+        <BigCountdown endsAt={g.prematchEndsAt} sub="" />
       </View>
-      <Button title="Cancel" variant="ghost" onPress={() => engine.goMenu()} />
+      <Button title="Cancel" variant="ghost" style={{ marginHorizontal: 12, marginBottom: 8 }} onPress={() => engine.goMenu()} />
     </Screen>
   );
 }
+
+/** "..." after "Finding players": the dots light up one after another. */
+function Dot({ delay }: { delay: number }) {
+  const v = useSharedValue(0.15);
+  useEffect(() => {
+    v.set(withDelay(delay, withRepeat(withSequence(withTiming(1, { duration: 400 }), withTiming(1, { duration: 600 }), withTiming(0.15, { duration: 400 })), -1, false)));
+  }, [delay, v]);
+  const st = useAnimatedStyle(() => ({ opacity: v.value }));
+  return <Animated.Text style={[s.h1, { fontSize: 24 }, st]}>.</Animated.Text>;
+}
+const LoadingDots = () => (
+  <View accessibilityElementsHidden importantForAccessibility="no" style={{ flexDirection: 'row' }}>
+    <Dot delay={0} /><Dot delay={200} /><Dot delay={400} />
+  </View>
+);
 
 // ── Lobby + pre-match countdown ────────────────────────────────────────────
 export function Lobby({ s: g }: { s: GameState }) {
@@ -92,22 +109,16 @@ export function Lobby({ s: g }: { s: GameState }) {
   }, [filled]);
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 20 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', gap: 6 }}>
-            {['LAST', 'WORD'].map((wd) => <View key={wd} style={{ flexDirection: 'row', gap: 2 }}>{wd.split('').map((c, i) => <Tile key={i} ch={c} size={18} animate={false} />)}</View>)}
+            <View style={{ flexDirection: 'row', gap: 2 }}>{'LASTWORD'.split('').map((c, i) => <Tile key={i} ch={c} size={18} animate={false} />)}</View>
           </View>
           <Pressable onPress={() => engine.goMenu()} hitSlop={10}><Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: w(0.72) }}>Leave</Text></Pressable>
         </View>
-        <Text style={[s.eyebrow, { marginTop: 28 }]}>Match {g.matchId}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 4 }}>
-          <Text style={s.h1}>{full ? 'Match found' : 'Finding players'}</Text>
-          <Text style={[{ fontFamily: F.display, fontSize: 20 }, s.tabular]}>
-            <Text style={{ color: full ? C.mint : C.primary }}>{filled}</Text><Text style={{ color: w(0.5) }}>/6 players</Text>
-          </Text>
-        </View>
-        <View style={{ height: 6, borderRadius: 3, backgroundColor: w(0.06), marginTop: 12, overflow: 'hidden' }}>
-          <View style={{ height: 6, width: `${(filled / 6) * 100}%`, backgroundColor: full ? C.mint : C.primary, borderRadius: 3 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 28 }}>
+          <Text style={[s.h1, { fontSize: 24 }]}>{full ? 'Match found' : 'Finding players'}</Text>
+          {!full && <LoadingDots />}
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 22 }}>
           {g.players.map((p, i) => {
@@ -137,14 +148,6 @@ export function Lobby({ s: g }: { s: GameState }) {
               </Card>
             );
           })}
-        </View>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 22 }}>
-          {[['5', 'rounds'], ['60s', 'per round'], ['1', 'out each round']].map(([a, b]) => (
-            <View key={b} style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
-              <Text style={{ fontFamily: F.display, fontSize: 20, color: C.white }}>{a}</Text>
-              <Text style={{ fontFamily: F.body, fontSize: 11, color: w(0.7) }}>{b}</Text>
-            </View>
-          ))}
         </View>
       </ScrollView>
       {g.phase === 'prematch' && (
@@ -196,6 +199,7 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
             <Text style={{ fontFamily: F.display, fontSize: 36, color: C.coral }}>{ordinal(me.placement!)}</Text>
             <Text style={{ fontFamily: F.bodySemi, fontSize: 18, color: w(0.7) }}>  of 6</Text>
           </Text>
+          <View style={{ marginTop: 12 }}><XpChip gameId={g.serverId} /></View>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 22 }}>
           <Stat label="Match score" value={me.totalScore} color={C.amber} />
@@ -209,8 +213,8 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
           {remaining.map((p) => <Row key={p.id} p={p} onPress={actOn(p)} right={<Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65) }}>{p.totalScore} total</Text>} />)}
         </View>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 'auto', paddingTop: 24 }}>
-          <Button title="Back to lobby" variant="ghost" style={{ flex: 1 }} onPress={() => engine.goMenu()} />
-          <Button title="Play again" style={{ flex: 1 }} onPress={() => engine.startMatch()} />
+          <Button title="Back to lobby" variant="ghost" style={{ flex: 1 }} onPress={() => afterCelebration(() => engine.goMenu())} />
+          <Button title="Play again" style={{ flex: 1 }} onPress={() => afterCelebration(() => engine.startMatch())} />
         </View>
         {sheet}
       </PageScroll>
@@ -243,6 +247,7 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
           return <Row key={row.id} p={p} rank={String(i + 1)} out={row.id === e.playerId} highlight={p.id === HUMAN_ID ? 'you' : undefined} right={num(row.roundScore)} onPress={actOn(p)} />;
         })}
       </View>
+      {me.status === 'active' && <FadeUp delay={400} style={{ marginTop: 20 }}><ProgressHint /></FadeUp>}
       {sheet}
     </PageScroll>
   );
@@ -296,6 +301,7 @@ export function FinalResults({ s: g }: { s: GameState }) {
   const youWon = winner.id === HUMAN_ID;
   const placed = g.players.slice().sort((a, b) => (a.placement ?? 9) - (b.placement ?? 9));
   const total = useAnimatedNumber(winner.totalScore, 1200);
+  const xpEarned = usePendingXp(g.serverId);
   useEffect(() => {
     if (youWon) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -306,15 +312,19 @@ export function FinalResults({ s: g }: { s: GameState }) {
     <View style={{ flex: 1 }}>
       <PageScroll gold>
         <FadeUp style={{ alignItems: 'center', paddingTop: 20 }}>
-          <Text style={{ fontSize: 32, marginBottom: -6, zIndex: 2 }}>👑</Text>
+          <Text style={{ fontSize: 44, marginBottom: -6, marginTop: -8, zIndex: 2 }}>👑</Text>
           <Avatar player={winner} size={104} ring />
-          <Text style={[s.h1, { fontSize: 34, textAlign: 'center', marginTop: 18 }]}>{youWon ? 'You have the last word 🎉' : `${winner.name} wins the match`}</Text>
-          {!youWon && isBot(winner) && <View style={{ marginTop: 8 }}><BotBadge size="lg" /></View>}
-          {youWon && <Text style={[s.body, { marginTop: 4 }]}>Five rounds, five survivals. Champion.</Text>}
+          <Text style={[s.h1, { fontSize: 30, textAlign: 'center', marginTop: 18 }]}>{youWon ? 'You got the last word!' : `${winner.name} got the last word`}</Text>
         </FadeUp>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 22 }}>
+        {youWon && (
+          <View style={{ marginTop: 22 }}>
+            <ShareButton variant="primary" title="Share your win" data={{ kind: 'match', name: me.name, points: me.totalScore, bestWord: me.stats.bestWord, wordsFound: me.stats.wordsFound }} />
+          </View>
+        )}
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: youWon ? 12 : 22 }}>
           <Stat label="Match score" value={total} color={C.amber} />
-          <Stat label="Words discovered" value={winner.stats.wordsFound} />
+          <Stat label="Words found" value={winner.stats.wordsFound} />
+          <Stat label="XP earned" value={xpEarned} color={C.sky} />
         </View>
         <View style={{ marginTop: 8, flexDirection: 'row' }}>
           <Stat label="Longest word" value={winner.stats.longestWord ? winner.stats.longestWord.toUpperCase() : '—'} />
@@ -339,8 +349,8 @@ export function FinalResults({ s: g }: { s: GameState }) {
           ))}
         </View>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 'auto', paddingTop: 24 }}>
-          <Button title="Back to lobby" variant="ghost" style={{ flex: 1 }} onPress={() => engine.goMenu()} />
-          <Button title="Play again" variant="gold" style={{ flex: 1 }} onPress={() => engine.startMatch()} />
+          <Button title="Back to lobby" variant="ghost" style={{ flex: 1 }} onPress={() => afterCelebration(() => engine.goMenu())} />
+          <Button title="Play again" variant="gold" style={{ flex: 1 }} onPress={() => afterCelebration(() => engine.startMatch())} />
         </View>
         {sheet}
       </PageScroll>
@@ -363,6 +373,7 @@ export function SoloResults({ s: g }: { s: GameState }) {
         ) : (
           <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.7) }}>Personal best <Text style={{ fontFamily: F.bodyBold, color: C.white }}>{g.personalBest}</Text></Text>
         )}
+        <View style={{ marginTop: 12 }}><XpChip gameId={g.serverId} /></View>
       </FadeUp>
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 22 }}>
         <Stat label="Words found" value={`${me.roundWords.length} / ${g.possibleWords}`} />
@@ -391,9 +402,14 @@ export function SoloResults({ s: g }: { s: GameState }) {
           </View>
         </>
       )}
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 'auto', paddingTop: 24 }}>
-        <Button title="Main menu" variant="ghost" style={{ flex: 1 }} onPress={() => engine.goMenu()} />
-        <Button title="Play again" style={{ flex: 1 }} onPress={() => engine.startSingle()} />
+      <View style={{ marginTop: 'auto', paddingTop: 24, gap: 10 }}>
+        {me.roundScore > 0 && (
+          <ShareButton variant="ghost" title="Share your score" data={{ kind: 'solo', name: me.name, points: me.roundScore, bestWord: me.stats.bestWord, wordsFound: me.roundWords.length, source: g.source, newBest: g.newBest }} />
+        )}
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <Button title="Main menu" variant="ghost" style={{ flex: 1 }} onPress={() => afterCelebration(() => engine.goMenu())} />
+          <Button title="Play again" style={{ flex: 1 }} onPress={() => afterCelebration(() => engine.startSingle())} />
+        </View>
       </View>
     </PageScroll>
   );

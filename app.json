@@ -61,6 +61,15 @@
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
+      ],
+      "expo-sharing",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Last Word saves your result cards to your photos.",
+          "savePhotosPermission": "Last Word saves your result cards to your photos.",
+          "isAccessMediaLocationEnabled": false
+        }
       ]
     ],
     "experiments": {

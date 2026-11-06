@@ -4,10 +4,12 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { accounts } from '@/lib/account';
 import { engine } from '@/lib/engine';
+import { progress } from '@/lib/progress';
 import { AuthFlow, Onboarding } from './Auth';
 import { GameScreen } from './GameScreen';
 import { Home } from './Home';
 import { useAuth, useGame } from './kit';
+import { CelebrationHost } from './Progress';
 import { EliminationScreen, FinalResults, Lobby, SoloCountdown, SoloResults } from './Screens';
 
 /** Screen flow for the whole app: sign-in, onboarding, then the game's phases. */
@@ -29,7 +31,7 @@ export function LastWordApp() {
   const name = a?.name;
   const photo = a?.photo ?? null;
   useEffect(() => {
-    if (id) engine.setProfile(id, name || 'You', photo);
+    if (id) { progress.use(id); engine.setProfile(id, name || 'You', photo); }
     else engine.goMenu();
   }, [id, name, photo]);
 
@@ -38,9 +40,12 @@ export function LastWordApp() {
   useEffect(() => {
     if (!ready) return;
     void engine.resumeIfInMatch();
-    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') void engine.resumeIfInMatch(); });
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') { void engine.resumeIfInMatch(); void progress.refresh(); } });
     return () => sub.remove();
   }, [ready, id]);
+
+  // Back on the home screen: pick up any XP the server awarded.
+  useEffect(() => { if (g.phase === 'menu') void progress.refresh(); }, [g.phase]);
 
   let key: string;
   let screen: React.ReactNode;
@@ -61,8 +66,11 @@ export function LastWordApp() {
   }
   // A quick cross-fade whenever the screen changes.
   return (
-    <Animated.View key={key} entering={FadeIn.duration(220)} style={{ flex: 1 }}>
-      {screen}
-    </Animated.View>
+    <>
+      <Animated.View key={key} entering={FadeIn.duration(220)} style={{ flex: 1 }}>
+        {screen}
+      </Animated.View>
+      <CelebrationHost />
+    </>
   );
 }

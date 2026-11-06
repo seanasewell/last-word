@@ -6,6 +6,10 @@
 // submissions — human or bot — go through `submit()`, which validates with
 // the word engine.
 //
+// XP, achievements and challenges are awarded by the server, only for games
+// it played: online elimination matches and server-timed solo challenges.
+// Local fallbacks (no connection) are playable but earn nothing.
+//
 // Elimination matches are played online when signed in: the Supabase server
 // is the referee (it picks sources, keeps time, checks and scores words, plays
 // the bots, eliminates and records results). The app checks in about once a
@@ -24,6 +28,7 @@ import {
   makePlayer, pickBots, rankByRound, resetForRound, type Player, type WordEntry,
 } from './players';
 import { planBotRound, type PlannedSubmission } from './bots';
+import { progress } from './progress';
 
 export type Mode = 'single' | 'multi';
 export type Phase =
@@ -76,6 +81,8 @@ export interface GameState {
   personalBest: number;
   newBest: boolean;
   missedLongest: string[];
+  /** The server's id for this game (online match or server-timed solo); null when played locally. */
+  serverId: string | null;
 }
 
 // ── Server snapshot (see mm_tick) ──
@@ -110,6 +117,8 @@ interface Online {
   flushScheduled: boolean;
   choice: 'none' | 'spectate';
   done: boolean;
+  /** Last round whose XP has been loaded. */
+  scoredRound?: number;
 }
 
 /** Postgres timestamps carry microseconds; trim to milliseconds before parsing. */
@@ -145,6 +154,8 @@ export class GameEngine {
   private matchListeners = new Set<(r: MatchResult) => void>();
   private matchCounted = false;
   private online: Online | null = null;
+  /** The server-timed solo game in progress. */
+  private solo: { id: string; offset: number; pending: Set<Promise<void>> } | null = null;
 
   /** Called once per finished elimination match for the human player. */
   onMatchEnd(fn: (r: MatchResult) => void) { this.matchListeners.add(fn); return () => { this.matchListeners.delete(fn); }; }
@@ -170,7 +181,7 @@ export class GameEngine {
       lastElimination: null, winnerId: null, spectating: false, awaitingChoice: false,
       humanName: 'You',
       personalBest: 0,
-      newBest: false, missedLongest: [],
+      newBest: false, missedLongest: [], serverId: null,
     };
   }
 
@@ -199,6 +210,7 @@ export class GameEngine {
   // ── intents ──
 
   goMenu() {
+    this.solo = null;
     const o = this.online;
     if (o && !o.done && o.snap?.match.status === 'lobby') void supabase.rpc('mm_leave', { p_match: o.matchId });
     this.online = null;
@@ -213,11 +225,33 @@ export class GameEngine {
     this.set({
       mode: 'single', matchId: newId(), round: 1, usedSources: this.lastSingleSource ? [this.lastSingleSource] : [],
       players: [human], winnerId: null, lastElimination: null, spectating: false,
-      awaitingChoice: false, newBest: false, missedLongest: [],
+      awaitingChoice: false, newBest: false, missedLongest: [], serverId: null,
       // A short 3-2-1 before the word appears, so the player can get ready.
       phase: 'sp-countdown', source: '', accepting: false, prematchEndsAt: Date.now() + PREMATCH,
     });
-    this.after(PREMATCH, () => this.beginRound());
+    this.solo = null;
+    const t = this.token;
+    this.after(PREMATCH, () => { void this.beginSoloOnline(t); });
+  }
+
+  /** Solo on the server when possible (so it earns XP); a local round otherwise. */
+  private async beginSoloOnline(t: number) {
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      if (t !== this.token) return;
+      if (!sess.session) { this.beginRound(); return; }
+      const t0 = Date.now();
+      const { data, error } = await supabase.rpc('solo_start', { p_avoid: this.lastSingleSource || null });
+      const t1 = Date.now();
+      if (t !== this.token) return;
+      if (error || !data) { this.beginRound(); return; }
+      const g = data as { id: string; source: string; possible_words: number; started_at: string; ends_at: string; server_now: string };
+      const offset = parseTs(g.server_now) - (t0 + t1) / 2;
+      this.solo = { id: g.id, offset, pending: new Set() };
+      this.beginRound({ source: g.source, possible: g.possible_words, startedAt: parseTs(g.started_at) - offset, endsAt: parseTs(g.ends_at) - offset, serverId: g.id });
+    } catch {
+      if (t === this.token) this.beginRound();
+    }
   }
 
   /** Find an online match; falls back to a local one when that isn't possible. */
@@ -229,8 +263,9 @@ export class GameEngine {
     this.set({
       mode: 'multi', matchId: newId(), phase: 'lobby', round: 0, source: '', usedSources: [],
       players: padSlots([human]), lobbyFilled: 1, winnerId: null, lastElimination: null,
-      spectating: false, awaitingChoice: false, accepting: false,
+      spectating: false, awaitingChoice: false, accepting: false, serverId: null,
     });
+    this.solo = null;
     void this.joinOnline(this.token);
   }
 
@@ -243,7 +278,7 @@ export class GameEngine {
     this.set({
       mode: 'multi', matchId: newId(), phase: 'lobby', round: 0, source: '', usedSources: [],
       players: [human, ...bots], lobbyFilled: 1, winnerId: null, lastElimination: null,
-      spectating: false, awaitingChoice: false, accepting: false,
+      spectating: false, awaitingChoice: false, accepting: false, serverId: null,
     });
     let delay = 700;
     for (let n = 2; n <= 6; n++) {
@@ -254,6 +289,35 @@ export class GameEngine {
       this.set({ phase: 'prematch', prematchEndsAt: Date.now() + PREMATCH });
       this.after(PREMATCH, () => this.beginRound());
     });
+  }
+
+  /**
+   * Developer shortcut: straight into a championship round (1v1 against a
+   * bot) with rounds 1–4 already played out. Runs on this phone only and is
+   * never recorded (no ranks, no XP).
+   */
+  devStartChampionship() {
+    this.online = null;
+    this.clearTimers();
+    this.matchCounted = true; // never counted
+    const human = this.makeHuman();
+    const bots = pickBots(5, human.name);
+    const used: string[] = [];
+    for (let i = 0; i < TOTAL_ROUNDS - 1; i++) used.push(nextSource(used));
+    const total = () => 900 + Math.floor(Math.random() * 1200);
+    const players: Player[] = [
+      { ...human, totalScore: total() },
+      { ...bots[0], totalScore: total() },
+      // Knocked out in rounds 1–4 (6th to 3rd place).
+      ...bots.slice(1).map((b, i) => ({ ...b, status: 'eliminated' as const, eliminatedInRound: i + 1, placement: 6 - i, totalScore: 150 + 220 * i + Math.floor(Math.random() * 120) })),
+    ];
+    this.set({
+      mode: 'multi', matchId: newId(), round: TOTAL_ROUNDS - 1, source: '', usedSources: used,
+      players, lobbyFilled: 6, winnerId: null, lastElimination: null,
+      spectating: false, awaitingChoice: false, accepting: false, serverId: null,
+    });
+    this.solo = null;
+    this.beginRound();
   }
 
   spectate() {
@@ -298,17 +362,40 @@ export class GameEngine {
     const players = s.players.slice();
     players[idx] = next;
     this.set({ players });
+    if (this.solo && playerId === HUMAN_ID) this.sendSoloWord(this.solo, result.word);
     return result;
   }
 
+  /** Send a solo word to the server; if the server turns it down, take it back. */
+  private sendSoloWord(solo: NonNullable<GameEngine['solo']>, word: string) {
+    const job = (async () => {
+      let ok = true;
+      try {
+        const { data, error } = await supabase.rpc('solo_submit', { p_game: solo.id, p_word: word });
+        ok = !error && !!data && (data as { ok: boolean }).ok;
+      } catch {
+        ok = true; // network hiccup: keep it on screen; the server's score is final at the end
+      }
+      if (ok || this.solo !== solo) return;
+      const s = this.state;
+      const me = s.players[0];
+      const hit = me?.roundWords.find((x) => x.word === word);
+      if (!me || !hit) return;
+      const roundWords = me.roundWords.filter((x) => x.word !== word);
+      this.set({ players: [{ ...me, roundWords, roundScore: me.roundScore - hit.points, totalScore: me.totalScore - hit.points, stats: { ...me.stats, wordsFound: me.stats.wordsFound - 1 } }] });
+    })();
+    solo.pending.add(job);
+    void job.finally(() => solo.pending.delete(job));
+  }
+
   // ── round lifecycle ──
-  private beginRound() {
+  private beginRound(server?: { source: string; possible: number; startedAt: number; endsAt: number; serverId: string }) {
     this.clearTimers();
     const s = this.state;
     const single = s.mode === 'single';
     const round = single ? 1 : s.round + 1;
     // A brand-new source every round, never one already used in this match.
-    const source = nextSource(s.usedSources);
+    const source = server?.source ?? nextSource(s.usedSources);
     if (single) this.lastSingleSource = source;
     const duration = single ? SINGLE_DURATION : ROUND_DURATION;
 
@@ -327,17 +414,20 @@ export class GameEngine {
     });
 
     const now = Date.now();
+    const startedAt = server?.startedAt ?? now;
+    const endsAt = server?.endsAt ?? now + duration;
     this.set({
       phase: single ? 'sp-playing' : 'round', round, source,
       usedSources: [...s.usedSources, source], players,
-      roundStartedAt: now, roundEndsAt: now + duration, accepting: true,
-      possibleWords: candidates.length, lastElimination: s.lastElimination,
+      roundStartedAt: startedAt, roundEndsAt: endsAt, accepting: true,
+      possibleWords: server?.possible ?? candidates.length, lastElimination: s.lastElimination,
+      serverId: server?.serverId ?? (single ? null : s.serverId),
     });
 
     if (this.plans.size) {
       this.tick = setInterval(() => this.runBots(), 100);
     }
-    this.after(duration, () => this.endRound());
+    this.after(Math.max(0, endsAt - Date.now()), () => this.endRound());
   }
 
   /** Count the match for the human once: when they're knocked out or the match ends. */
@@ -381,6 +471,8 @@ export class GameEngine {
         .slice(0, 6)
         .map((c) => c.word);
       this.set({ accepting: false, phase: 'sp-results', personalBest: best, newBest, missedLongest: missed });
+      const solo = this.solo;
+      if (solo) void this.finishSolo(solo);
       return;
     }
 
@@ -417,6 +509,13 @@ export class GameEngine {
     this.after(BETWEEN_ROUNDS, () => this.beginRound());
   }
 
+  /** Tell the server the solo round is over (after its last words land), then load the XP it awarded. */
+  private async finishSolo(solo: NonNullable<GameEngine['solo']>) {
+    await Promise.allSettled([...solo.pending]);
+    try { await supabase.rpc('solo_finish', { p_game: solo.id }); } catch { /* the sweeper finishes it anyway */ }
+    progress.refreshSoon();
+  }
+
   // ── online play ──────────────────────────────────────────────────────────
 
   /** If this player is still in an unfinished online match (e.g. the app was closed mid-round), go back into it. */
@@ -428,11 +527,12 @@ export class GameEngine {
       if (!data || t !== this.token || this.online || this.state.phase !== 'menu') return;
       this.clearTimers();
       this.matchCounted = false;
-      this.set({ mode: 'multi', matchId: newId(), round: 0, source: '', usedSources: [], players: [], winnerId: null, lastElimination: null, spectating: false, awaitingChoice: false, accepting: false });
+      this.set({ mode: 'multi', matchId: newId(), round: 0, source: '', usedSources: [], players: [], winnerId: null, lastElimination: null, spectating: false, awaitingChoice: false, accepting: false, serverId: data as string });
       this.online = {
         matchId: data as string, myPid: '', offset: 0, bestRtt: Infinity, snap: null, round: 0,
         extras: new Map(), queue: [], flushScheduled: false, choice: 'none', done: false,
       };
+      this.set({ serverId: data as string });
       void this.poll(this.token, this.online);
     } catch {
       // Offline: stay on the menu.
@@ -455,6 +555,7 @@ export class GameEngine {
         matchId: data as string, myPid: '', offset: 0, bestRtt: Infinity, snap: null, round: 0,
         extras: new Map(), queue: [], flushScheduled: false, choice: 'none', done: false,
       };
+      this.set({ serverId: data as string });
       void this.poll(t, this.online);
     } catch {
       if (t === this.token) this.startLocalMatch();
@@ -556,6 +657,12 @@ export class GameEngine {
     };
     let next = 1000;
     const until = (ts: string | null) => Math.min(1000, Math.max(150, toLocal(ts) - now + 120));
+
+    // A round just ended: the server has awarded its XP and achievements.
+    if (m.status !== 'round' && m.status !== 'lobby' && m.status !== 'prematch' && o.scoredRound !== m.round) {
+      o.scoredRound = m.round;
+      progress.refreshSoon();
+    }
 
     if (m.status === 'lobby' || m.status === 'prematch') {
       this.set({

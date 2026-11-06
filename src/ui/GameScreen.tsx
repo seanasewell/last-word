@@ -74,7 +74,7 @@ const SourceTiles = memo(function SourceTiles({ source, final }: { source: strin
   const size = Math.min(44, Math.floor((Math.min(width, 480) - 32) / longest - 4));
   let i = 0;
   return (
-    <View accessibilityLabel={`Source: ${source}`} style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 12, rowGap: 6, paddingHorizontal: 16 }}>
+    <View accessibilityLabel={`Source: ${source}`} style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 12, rowGap: 6, paddingHorizontal: 12 }}>
       {words.map((word, wi) => (
         <View key={wi} style={{ flexDirection: 'row', gap: 4 }}>
           {word.split('').map((ch) => {
@@ -128,49 +128,36 @@ function WordInput({ final }: { final: boolean }) {
   }, [msg]);
 
   const submit = () => {
-    // Commas separate several words in one submission; each is validated on its own.
-    const parts = value.split(',').map((x) => x.trim()).filter(Boolean);
-    if (!parts.length) return;
+    // One word at a time.
+    const raw = value.trim();
+    if (!raw) return;
     const id = ++seq.current;
-    const accepted: { word: string; points: number }[] = [];
-    const rejected: { raw: string; reason: string }[] = [];
-    for (const raw of parts) {
-      const r = engine.submit(HUMAN_ID, raw);
-      if (r.ok) accepted.push({ word: r.word, points: r.points });
-      else rejected.push({ raw, reason: REJECTION_TEXT[r.reason] });
-    }
-    const gained = accepted.reduce((n, a) => n + a.points, 0);
-    setValue(''); // always clear; rejected words flash red and fade
-    if (accepted.length) {
+    const r = engine.submit(HUMAN_ID, raw);
+    setValue(''); // always clear; a rejected word flashes red and fades
+    if (r.ok) {
       haptic.ok();
-      sfx.word(Math.max(...accepted.map((a) => a.word.length)));
-      setFloaters((f) => [...f.slice(-3), { id, text: `+${gained}` }]);
-    } else {
-      haptic.bad();
-      sfx.wrong();
-    }
-    if (!rejected.length) {
-      setMsg({ tone: 'ok', id, text: accepted.length === 1 ? `${accepted[0].word.toUpperCase()}  +${gained}` : `${accepted.length} words  +${gained}` });
+      sfx.word(r.word.length);
+      setFloaters((f) => [...f.slice(-3), { id, text: `+${r.points}` }]);
+      setMsg({ tone: 'ok', id, text: `${r.word.toUpperCase()}  +${r.points}` });
       return;
     }
-    setGhost({ id, text: rejected.map((r) => r.raw).join(', ') });
+    haptic.bad();
+    sfx.wrong();
+    setGhost({ id, text: raw });
     ghostFade.set(1);
     ghostFade.set(withDelay(250, withTiming(0, { duration: 700 })));
-    const first = rejected[0];
-    const why = parts.length === 1 ? first.reason : `${first.raw.toUpperCase()}: ${first.reason}`;
-    const more = rejected.length > 1 ? ` (+${rejected.length - 1} more)` : '';
-    setMsg({ tone: accepted.length ? 'mixed' : 'bad', id, text: accepted.length ? `${accepted.length} added +${gained} · ${why}${more}` : `${why}${more}` });
+    setMsg({ tone: 'bad', id, text: REJECTION_TEXT[r.reason] });
     shake.set(withSequence(...[-6, 6, -5, 4, 0].map((x) => withTiming(x, { duration: 60 }))));
   };
 
   const border = ghost && !value ? 'rgba(255,93,115,0.7)' : focused ? (final ? 'rgba(255,181,71,0.7)' : C.primary) : C.cardBorder;
   return (
-    <View style={{ paddingHorizontal: 16 }}>
+    <View style={{ paddingHorizontal: 12 }}>
       <Animated.View style={shakeStyle}>
         <TextInput
           ref={inputRef}
           value={value}
-          onChangeText={(t) => { setValue(t.replace(/[^a-zA-Z\- ',]/g, '').slice(0, 160)); if (ghost) setGhost(null); }}
+          onChangeText={(t) => { setValue(t.replace(/[^a-zA-Z]/g, '').slice(0, 40)); if (ghost) setGhost(null); }}
           onSubmitEditing={submit}
           submitBehavior="submit"
           returnKeyType="go"
@@ -270,7 +257,7 @@ function VersusSide({ p, leading }: { p: Player; leading: boolean }) {
   return (
     <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
       <Avatar player={p} size={52} ring={leading} />
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%', marginTop: 8 }}>
         <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: F.bodySemi, fontSize: 14, color: w(0.92) }}>{p.name}</Text>
         {isBot(p) && <BotBadge />}
       </View>
@@ -316,7 +303,7 @@ function WordList({ words }: { words: WordEntry[] }) {
       </View>
       {words.length === 0 ? (
         <View style={{ borderRadius: 18, borderWidth: 1, borderStyle: 'dashed', borderColor: w(0.12), padding: 18 }}>
-          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.6), textAlign: 'center' }}>Words you find appear here. Longer words score far more.</Text>
+          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.6), textAlign: 'center' }}>Words you find appear here. Longer words score more points.</Text>
         </View>
       ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
@@ -342,7 +329,7 @@ export function GameScreen({ s: g }: { s: GameState }) {
   return (
     <Screen gold={final} padBottom={false}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 10 }}>
           <View style={{ minWidth: 84 }}>
             <Text style={s.eyebrow}>{single ? 'Solo' : final ? 'Final' : 'Round'}</Text>
             <Text style={{ fontFamily: F.displayBold, fontSize: 18, color: C.white }}>{single ? 'Challenge' : `${g.round} of ${TOTAL_ROUNDS}`}</Text>
@@ -356,7 +343,7 @@ export function GameScreen({ s: g }: { s: GameState }) {
         </View>
 
         {spectating ? (
-          <View style={{ marginHorizontal: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 18, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, paddingHorizontal: 16, paddingVertical: 12 }}>
+          <View style={{ marginHorizontal: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 18, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, paddingHorizontal: 16, paddingVertical: 12 }}>
             <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>You placed <Text style={{ fontFamily: F.bodyBold, color: C.white }}>{ordinal(me.placement || 0)}</Text> · watching the rest</Text>
             <Pressable onPress={() => engine.goMenu()} hitSlop={10}><Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.primary }}>Leave</Text></Pressable>
           </View>
@@ -364,7 +351,7 @@ export function GameScreen({ s: g }: { s: GameState }) {
           <WordInput key={roundKey} final={final} />
         )}
 
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: insets.bottom + 24, gap: 14 }}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 4, paddingBottom: insets.bottom + 24, gap: 14 }}>
           {!single && (final ? <Versus players={active} /> : <Leaderboard players={active} started={started} />)}
           {!spectating && <WordList words={me.roundWords} />}
           {single && <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 11, color: w(0.55) }}>{g.possibleWords} words are hiding in this one.</Text>}

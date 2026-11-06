@@ -74,7 +74,7 @@ function Points({ text, top }: { text: string; top: number }) {
 export function AnimatedTileLogo({ size = 38 }: { size?: number }) {
   const reduce = useReducedMotion();
   const gap = Math.max(2, Math.round(size * 0.13));
-  const wordGap = Math.round(size * 0.32);
+  const wordGap = gap; // same spacing between words as between letters
   const tileH = size * 1.12;
   const width = 8 * size + 6 * gap + wordGap;
   const rackScale = 0.46;

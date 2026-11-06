@@ -7,12 +7,14 @@ import { supabase } from './supabase';
 
 /** Who to act on: a user id (from the ranks) or a seat in a match. */
 export type Target = { userId: string } | { matchPlayerId: string };
-export type ReportReason = 'name' | 'photo' | 'other';
 
 const args = (t: Target) => ('userId' in t ? { p_user: t.userId } : { p_match_player: t.matchPlayerId });
 
-export async function reportPlayer(t: Target, reason: ReportReason): Promise<string | null> {
-  const { error } = await supabase.rpc('report_player', { p_reason: reason, ...args(t) });
+export type ReportReason = 'name' | 'photo' | 'cheating' | 'other';
+
+/** Report a player. `details` is the player's own words, for "Other". */
+export async function reportPlayer(t: Target, reason: ReportReason, details?: string): Promise<string | null> {
+  const { error } = await supabase.rpc('report_player', { p_reason: reason, ...args(t), ...(details ? { p_details: details } : {}) });
   return error ? "Couldn't send the report. Try again." : null;
 }
 
