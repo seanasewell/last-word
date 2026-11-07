@@ -629,7 +629,6 @@ function ResultHeader({ d }: { d: ChallengeDetail }) {
   const other: Person = d.other ?? { id: null, name: 'Deleted player', photo_url: null };
   const win = d.outcome === 'win';
   const title = d.outcome === 'draw' ? "It's a draw" : win ? 'You win! 🏆' : `${other.name} wins`;
-  const diff = Math.abs((d.my_score ?? 0) - (d.their_score ?? 0));
   const side = (p: Person, score: number | null, lead: boolean) => (
     <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
       <PersonAvatar p={p} size={64} />
@@ -640,10 +639,8 @@ function ResultHeader({ d }: { d: ChallengeDetail }) {
   return (
     <Card style={{ padding: 20, borderColor: win ? 'rgba(255,181,71,0.45)' : C.cardBorder, backgroundColor: win ? 'rgba(255,181,71,0.08)' : C.card }}>
       <Text style={{ fontFamily: F.displayBold, fontSize: 26, color: win ? C.amber : C.white, textAlign: 'center' }}>{title}</Text>
-      {diff > 0 && <Text style={[sub, { textAlign: 'center', marginTop: 2 }]}>by {diff} {diff === 1 ? 'point' : 'points'}</Text>}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16 }}>
         {side(d.me, d.my_score, d.outcome === 'win')}
-        <Text style={{ fontFamily: F.display, fontSize: 18, color: w(0.5) }}>vs</Text>
         {side(other, d.their_score, d.outcome === 'loss')}
       </View>
       {d.forfeit && (
@@ -684,9 +681,9 @@ function WordCompare({ mine, theirs, otherName }: { mine: { word: string; points
   );
 }
 
-// ── After a 1v1 round (shown on the solo results screen) ──────────────────
-/** Wait for the server to score the round, then show the result or that the other player hasn't played yet. */
-export function ChallengeOutcome({ challengeId }: { challengeId: string }) {
+// ── After a 1v1 round (the game's results screen) ─────────────────────────
+/** Wait for the server to score the round; settles once both played, or once ours is recorded. */
+export function useChallengeOutcome(challengeId: string): { d: ChallengeDetail | null; err: boolean } {
   const [d, setD] = useState<ChallengeDetail | null>(null);
   const [err, setErr] = useState(false);
   useEffect(() => {
@@ -697,7 +694,6 @@ export function ChallengeOutcome({ challengeId }: { challengeId: string }) {
         try {
           const x = await challengeDetail(challengeId);
           if (!live) return;
-          // Done once it's settled, or once our own round is recorded (the other player may not have played).
           if (x.status === 'completed' || (x.i_played && !x.they_played) || i === 5) {
             setD(x);
             if (x.outcome === 'win') sfx.win(); else if (x.outcome === 'loss') sfx.eliminated();
@@ -710,17 +706,41 @@ export function ChallengeOutcome({ challengeId }: { challengeId: string }) {
     })();
     return () => { live = false; };
   }, [challengeId]);
+  return { d, err };
+}
+
+/** The result (or "locked in" while the other player hasn't played), then both players' words. */
+export function ChallengeOutcome({ d, err, myWords }: { d: ChallengeDetail | null; err: boolean; myWords: { word: string; points: number }[] }) {
   if (err) return <Text style={[sub, { textAlign: 'center' }]}>{"Couldn't load the result yet. Open it from 1v1 challenges."}</Text>;
   if (!d) return <Loading />;
   if (d.status !== 'completed') {
     return (
-      <Card style={{ padding: 16, alignItems: 'center' }}>
-        <Text style={{ fontFamily: F.displayBold, fontSize: 17, color: C.white, textAlign: 'center' }}>Your score is locked in ⚔️</Text>
-        <Text style={[sub, { textAlign: 'center', marginTop: 4 }]}>{`We'll let you know when ${d.other?.name ?? 'your opponent'} plays.`}</Text>
-      </Card>
+      <>
+        <Card style={{ padding: 16, alignItems: 'center' }}>
+          <Text style={{ fontFamily: F.displayBold, fontSize: 17, color: C.white, textAlign: 'center' }}>Your score is locked in ⚔️</Text>
+          <Text style={[sub, { textAlign: 'center', marginTop: 4 }]}>{`We'll let you know when ${d.other?.name ?? 'your opponent'} plays.`}</Text>
+        </Card>
+        <Eyebrow right={`${myWords.length} words`}>Your words</Eyebrow>
+        <WordChips words={myWords.map((x) => x.word)} />
+      </>
     );
   }
-  return <ResultHeader d={d} />;
+  return (
+    <>
+      <ResultHeader d={d} />
+      <WordCompare mine={d.my_words} theirs={d.their_words ?? []} otherName={d.other?.name ?? 'Opponent'} />
+    </>
+  );
+}
+
+/** Rematch from the results screen: send it, then show the challenges list. */
+export async function rematchFromResults(d: ChallengeDetail): Promise<void> {
+  if (!d.other?.id) return;
+  try {
+    await createChallenge(d.other.id, d.id);
+    engine.goMenu();
+    nav.reset([{ name: 'challenges' }]);
+  } catch (e) { challengeError(e); }
 }
 
 /** On solo results: a way into 1v1s. The challenge uses a fresh word, not this round. */

@@ -11,7 +11,7 @@ import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { ProgressHint, XpChip, afterGame, usePendingXp } from './Progress';
 import { nav } from './nav';
 import { ShareButton } from './Share';
-import { ChallengeCta, ChallengeOutcome } from './Social';
+import { ChallengeCta, ChallengeOutcome, rematchFromResults, useChallengeOutcome } from './Social';
 import { musicEnabled, sfx } from './sound';
 import { C, F, w } from './theme';
 
@@ -389,17 +389,52 @@ export function FinalResults({ s: g }: { s: GameState }) {
 }
 
 // ── Solo results ───────────────────────────────────────────────────────────
+/** After a 1v1 round: who won and both players' words, with Rematch. */
+function ChallengeResults({ g, challengeId }: { g: GameState; challengeId: string }) {
+  const me = g.players[0];
+  const { d, err } = useChallengeOutcome(challengeId);
+  const [busy, setBusy] = useState(false);
+  const toChallenges = () => { engine.goMenu(); nav.reset([{ name: 'challenges' }]); };
+  const canRematch = d?.status === 'completed' && !!d.other?.id;
+  const footer = (
+    <>
+      {canRematch && <Button title={busy ? 'Sending…' : 'Rematch'} disabled={busy} onPress={() => afterGame(() => { setBusy(true); void rematchFromResults(d!).finally(() => setBusy(false)); })} />}
+      <Button title="Back to challenges" variant={canRematch ? 'ghost' : 'primary'} onPress={() => afterGame(toChallenges)} />
+    </>
+  );
+  return (
+    <PageScroll footer={footer}>
+      <FadeUp style={{ paddingTop: 12 }}>
+        <ChallengeOutcome d={d} err={err} myWords={me.roundWords} />
+      </FadeUp>
+      <View style={{ alignItems: 'center', marginTop: 16 }}><XpChip gameId={g.serverId} /></View>
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+        <Stat label="Words found" value={`${me.roundWords.length} / ${g.possibleWords}`} />
+        <Stat label="Longest word" value={me.stats.longestWord ? me.stats.longestWord.toUpperCase() : '—'} />
+      </View>
+      {g.missedLongest.length > 0 && (
+        <>
+          <Text style={[s.eyebrow, { marginTop: 18, marginBottom: 8 }]}>Long ones you missed</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {g.missedLongest.map((x) => (
+              <Text key={x} style={{ fontFamily: F.displayBold, fontSize: 14, color: w(0.72), borderWidth: 1, borderColor: w(0.12), paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>{x.toUpperCase()}</Text>
+            ))}
+          </View>
+        </>
+      )}
+    </PageScroll>
+  );
+}
+
 export function SoloResults({ s: g }: { s: GameState }) {
+  if (g.challenge?.kind === 'play') return <ChallengeResults g={g} challengeId={g.challenge.challengeId} />;
+  return <PlainSoloResults g={g} />;
+}
+
+function PlainSoloResults({ g }: { g: GameState }) {
   const me = g.players[0];
   const score = useAnimatedNumber(me.roundScore, 1100);
-  const ch = g.challenge;
-  const toChallenges = (id?: string) => () => { engine.goMenu(); nav.reset(id ? [{ name: 'challenges' }, { name: 'challenge', id }] : [{ name: 'challenges' }]); };
-  const footer = ch?.kind === 'play' ? (
-    <>
-      <Button title="See full results" onPress={() => afterGame(toChallenges(ch.challengeId))} />
-      <Button title="Back to challenges" variant="ghost" onPress={() => afterGame(toChallenges())} />
-    </>
-  ) : (
+  const footer = (
     <ResultActions shareTitle="Share your score"
       share={me.roundScore > 0 ? { kind: 'solo', name: me.name, points: me.roundScore, bestWord: me.stats.bestWord, wordsFound: me.roundWords.length, source: g.source, newBest: g.newBest } : undefined}
       onAgain={() => engine.startSingle()}
@@ -407,7 +442,6 @@ export function SoloResults({ s: g }: { s: GameState }) {
   );
   return (
     <PageScroll footer={footer}>
-      {ch?.kind === 'play' && <FadeUp style={{ paddingTop: 12 }}><ChallengeOutcome challengeId={ch.challengeId} /></FadeUp>}
       <FadeUp style={{ alignItems: 'center', paddingTop: 16 }}>
         <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.7) }}>{`Time's up · ${g.source}`}</Text>
         <Text style={[{ fontFamily: F.display, fontSize: 72, color: C.amber }, s.tabular]}>{score}</Text>
@@ -426,7 +460,7 @@ export function SoloResults({ s: g }: { s: GameState }) {
         <Stat label="Longest word" value={me.stats.longestWord ? me.stats.longestWord.toUpperCase() : '—'} />
         <Stat label="Highest scoring" value={me.stats.bestWord ? `${me.stats.bestWord.word.toUpperCase()} +${me.stats.bestWord.points}` : '—'} />
       </View>
-      {!ch && g.serverId && (
+      {g.serverId && (
         <View style={{ marginTop: 16 }}>
           <ChallengeCta />
         </View>
