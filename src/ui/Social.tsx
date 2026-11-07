@@ -140,12 +140,6 @@ export function FriendsScreen() {
     finally { setBusy(null); }
   };
   const invite = async () => { const e = await shareFriendInvite(); if (e) setNote(e); };
-  const pasteInvite = async () => {
-    const text = (await Clipboard.getUrlAsync().catch(() => null)) ?? (await Clipboard.getStringAsync().catch(() => ''));
-    const token = inviteTokenFrom(text);
-    if (token) nav.push({ name: 'invite', token });
-    else setNote('Copy the invite link your friend sent you, then tap Paste invite link again.');
-  };
 
   const all = list.data ?? [];
   const incoming = all.filter((f) => f.relation === 'received');
@@ -223,9 +217,6 @@ export function FriendsScreen() {
         </>
       )}
 
-      <Pressable onPress={() => void pasteInvite()} hitSlop={8} style={{ alignSelf: 'center', marginTop: 24 }}>
-        <Text style={{ fontFamily: F.bodySemi, fontSize: 13, color: w(0.7), textDecorationLine: 'underline' }}>Have an invite link? Paste invite link</Text>
-      </Pressable>
     </View>
   );
 }
