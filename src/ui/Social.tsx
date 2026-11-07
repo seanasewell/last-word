@@ -503,7 +503,7 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
             {history.map((c) => (
               <ChallengeRowView key={c.id} c={c} now={now}
                 right={c.status === 'completed' && c.other?.id
-                  ? <SmallButton title="Rematch" disabled={action.busy} onPress={() => void action.run(() => sendChallenge({ id: c.other!.id!, name: c.other!.name }, c.id))} />
+                  ? <SmallButton title="Rematch" disabled={action.busy} onPress={() => void action.run(async () => { await sendChallenge({ id: c.other!.id!, name: c.other!.name }, c.id); setTab('active'); list.reload(); })} />
                   : undefined} />
             ))}
           </View>
@@ -511,7 +511,7 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
       )}
 
       <ChallengePicker open={picking} onClose={() => setPicking(false)}
-        onPick={async (to) => { await sendChallenge(to); setPicking(false); }} />
+        onPick={async (to) => { await sendChallenge(to); setPicking(false); setTab('active'); list.reload(); }} />
     </View>
   );
 }
