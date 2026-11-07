@@ -210,7 +210,8 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
   }, [secs, tickPop]);
   const tickStyle = useAnimatedStyle(() => ({ transform: [{ scale: tickPop.value }] }));
   const nextRound = e.round + 1;
-  const youOut = e.playerId === HUMAN_ID && g.awaitingChoice;
+  // You're out and haven't chosen yet: keep your result page and its buttons up.
+  const youOut = (e.playerId === HUMAN_ID || me.status === 'eliminated') && g.awaitingChoice;
 
   useEffect(() => {
     if (e.playerId === HUMAN_ID) {

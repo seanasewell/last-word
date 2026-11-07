@@ -28,6 +28,9 @@ const SOURCES = {
 type Name = keyof typeof SOURCES;
 
 const KEY = 'lw.sound';
+// Sound effects sit on top of the music without pushing the phone's speaker into its limiter,
+// which would briefly turn everything (music included) down. The WAVs peak near 0 dB.
+const SFX_VOLUME = 0.5;
 const players = new Map<string, AudioPlayer>();
 const listeners = new Set<() => void>();
 
@@ -79,6 +82,8 @@ const resultPlayers = new Map<ResultMusic, AudioPlayer>();
 // yet, which silences a song that's still loading. Song players keep the session on instead.
 const SONG = { keepAudioSessionActive: true } as const;
 let resultOn = false;
+// Tracked from AppState changes: AppState.currentState can read 'unknown' until the first change.
+let appActive = true;
 const fades = new Map<MusicTrack, ReturnType<typeof setInterval>>();
 let musicHooked = false;
 let inGame = false;
@@ -105,6 +110,7 @@ function trackPlayer(track: MusicTrack): AudioPlayer | null {
     if (!musicHooked) {
       musicHooked = true;
       AppState.addEventListener('change', (s) => {
+        appActive = s === 'active';
         if (s === 'active') { if (inGame && !resultOn) resumeMusic(); }
         else { musicPlayers.forEach((p) => p.pause()); stopResultMusic(); }
       });
@@ -173,7 +179,7 @@ function stopResultMusic() {
 export function playResultMusic(kind: ResultMusic) {
   if (currentTrack) fadeOut(currentTrack);
   stopResultMusic();
-  if (!musicEnabled() || AppState.currentState !== 'active') return;
+  if (!musicEnabled() || !appActive) return;
   try {
     let p = resultPlayers.get(kind);
     if (!p) { p = createAudioPlayer(RESULTS[kind], SONG); p.volume = MUSIC_VOLUME; resultPlayers.set(kind, p); }
@@ -203,6 +209,7 @@ function player(name: Name, slot = 0): AudioPlayer | null {
     let p = players.get(key);
     if (!p) {
       p = createAudioPlayer(SOURCES[name]);
+      p.volume = SFX_VOLUME;
       players.set(key, p);
     }
     return p;

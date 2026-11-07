@@ -667,15 +667,19 @@ export class GameEngine {
         lobbyFilled: players.length, prematchEndsAt: toLocal(m.prematch_ends_at), accepting: false,
       });
       if (m.status === 'prematch') next = until(m.prematch_ends_at);
+    } else if (imOut && o.choice === 'none') {
+      // Knocked out: stay on your own result (with its buttons) until you choose, even as the
+      // match plays on. Keep showing the elimination that knocked you out, not later ones.
+      if (m.status === 'final') o.done = true;
+      const mine = this.state.lastElimination?.playerId === HUMAN_ID ? this.state.lastElimination : lastElimination;
+      this.set({ ...base, lastElimination: mine, phase: 'elimination', players, awaitingChoice: true, accepting: false, nextRoundAt: 0 });
+      this.countMatch(false, meP?.placement ?? 0);
+      if (o.done) return 0;
     } else if (m.status === 'final') {
       o.done = true;
       this.set({ ...base, phase: 'final', players, winnerId: m.winner_id ? mapId(m.winner_id) : null, accepting: false, awaitingChoice: false, nextRoundAt: 0 });
       this.countMatch(m.winner_id === o.myPid, meP?.placement ?? 0);
       return 0;
-    } else if (imOut && o.choice === 'none') {
-      // Just knocked out: stay on the result until the player chooses.
-      this.set({ ...base, phase: 'elimination', players, awaitingChoice: true, accepting: false, nextRoundAt: 0 });
-      this.countMatch(false, meP?.placement ?? 0);
     } else if (m.status === 'round') {
       this.set({ ...base, phase: 'round', players, accepting: !imOut && now < base.roundEndsAt, awaitingChoice: false });
       next = until(m.round_ends_at);
