@@ -501,7 +501,7 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
         ) : (
           <View style={{ gap: 6, marginTop: 12 }}>
             {history.map((c) => (
-              <ChallengeRowView key={c.id} c={c} now={now}
+              <ChallengeRowView key={c.id} c={c} now={now} pressable
                 right={c.status === 'completed' && c.other?.id
                   ? <SmallButton title="Rematch" disabled={action.busy} onPress={() => void action.run(async () => { await sendChallenge({ id: c.other!.id!, name: c.other!.name }, c.id); setTab('active'); list.reload(); })} />
                   : undefined} />
@@ -516,11 +516,10 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
   );
 }
 
-function ChallengeRowView({ c, now, right }: { c: ChallengeRow; now: number; right?: React.ReactNode }) {
+/** `pressable`: the whole card opens the challenge (History). Active cards act only through their buttons. */
+function ChallengeRowView({ c, now, right, pressable = false }: { c: ChallengeRow; now: number; right?: React.ReactNode; pressable?: boolean }) {
   const other: Person = c.other ?? { id: null, name: 'Deleted player', photo_url: null };
   const done = c.status === 'completed';
-  // A challenge you sent that hasn't been accepted has nothing more to show; its Cancel button is on the row.
-  const sentPending = c.role === 'challenger' && c.status === 'pending';
   const color = done ? (c.outcome === 'win' ? C.mint : c.outcome === 'loss' ? C.coral : C.amber)
     : c.needs_response || c.your_turn ? C.amber : w(0.65);
   const when = done
@@ -528,8 +527,7 @@ function ChallengeRowView({ c, now, right }: { c: ChallengeRow; now: number; rig
     : c.status === 'pending' || c.status === 'accepted' ? timeLeft(c.expires_at, now)
     : new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return (
-    // A challenge that's ready goes straight into the round; anything else opens its page.
-    <Pressable disabled={sentPending} onPress={() => (c.your_turn ? playChallenge(c.id, other.name) : nav.push({ name: 'challenge', id: c.id }))}
+    <Pressable disabled={!pressable} onPress={() => nav.push({ name: 'challenge', id: c.id })}
       style={({ pressed }) => [row, { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16, backgroundColor: pressed ? 'rgba(61,139,255,0.12)' : w(0.04) }]}>
       <PersonAvatar p={other} size={38} />
       <View style={{ flex: 1 }}>
