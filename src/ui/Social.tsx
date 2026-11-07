@@ -629,7 +629,7 @@ function ResultHeader({ d }: { d: ChallengeDetail }) {
   const other: Person = d.other ?? { id: null, name: 'Deleted player', photo_url: null };
   const win = d.outcome === 'win';
   // Same wording as an elimination win.
-  const title = d.outcome === 'draw' ? "It's a draw" : win ? 'You got the last word! 🏆' : `${other.name} got the last word 😢`;
+  const title = d.outcome === 'draw' ? "It's a draw" : win ? 'You got the last word! 🎉' : `${other.name} got the last word 😢`;
   const side = (p: Person, score: number | null, lead: boolean) => (
     <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
       <PersonAvatar p={p} size={64} />
@@ -639,7 +639,7 @@ function ResultHeader({ d }: { d: ChallengeDetail }) {
   );
   return (
     <Card style={{ padding: 20, borderColor: win ? 'rgba(255,181,71,0.45)' : C.cardBorder, backgroundColor: win ? 'rgba(255,181,71,0.08)' : C.card }}>
-      <Text style={{ fontFamily: F.displayBold, fontSize: 26, color: win ? C.amber : C.white, textAlign: 'center' }}>{title}</Text>
+      <Text style={{ fontFamily: F.displayBold, fontSize: 26, color: C.white, textAlign: 'center' }}>{title}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16 }}>
         {side(d.me, d.my_score, d.outcome === 'win')}
         <Text style={{ fontFamily: F.display, fontSize: 18, color: w(0.5) }}>vs</Text>
