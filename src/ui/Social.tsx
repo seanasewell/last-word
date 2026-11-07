@@ -407,7 +407,8 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
   const respond = async (c: ChallengeRow, accept: boolean) => {
     setNote(null);
     try {
-      if (accept) { await acceptChallenge(c.id); nav.push({ name: 'challenge', id: c.id }); } else await declineChallenge(c.id);
+      // Accepting moves it to "Ready to play" on this list.
+      if (accept) await acceptChallenge(c.id); else await declineChallenge(c.id);
       list.reload();
     } catch (e) { setNote(friendlyError(e)); list.reload(); }
   };
@@ -465,7 +466,7 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
                 <View style={{ gap: 6 }}>
                   {ready.map((c) => (
                     <ChallengeRowView key={c.id} c={c} now={now}
-                      right={<SmallButton title="Play" onPress={() => nav.push({ name: 'challenge', id: c.id })} />} />
+                      right={<SmallButton title="Play" onPress={() => playChallenge(c.id, c.other?.name ?? 'Player')} />} />
                   ))}
                 </View>
               </>
@@ -513,7 +514,8 @@ function ChallengeRowView({ c, now, right }: { c: ChallengeRow; now: number; rig
     : c.status === 'pending' || c.status === 'accepted' ? timeLeft(c.expires_at, now)
     : new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return (
-    <Pressable onPress={() => nav.push({ name: 'challenge', id: c.id })}
+    // A challenge that's ready goes straight into the round; anything else opens its page.
+    <Pressable onPress={() => (c.your_turn ? playChallenge(c.id, other.name) : nav.push({ name: 'challenge', id: c.id }))}
       style={({ pressed }) => [row, { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16, backgroundColor: pressed ? 'rgba(61,139,255,0.12)' : w(0.04) }]}>
       <PersonAvatar p={other} size={38} />
       <View style={{ flex: 1 }}>
@@ -573,7 +575,7 @@ export function ChallengeScreen({ id }: { id: string }) {
           <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 16 }}>
             {d.needs_response && (
               <>
-                <Button title={busy ? 'Accepting…' : 'Accept challenge'} disabled={busy} onPress={() => void act(() => acceptChallenge(d.id))} />
+                <Button title={busy ? 'Accepting…' : 'Accept challenge'} disabled={busy} onPress={() => void act(async () => { await acceptChallenge(d.id); nav.backTo({ name: 'challenges' }); })} />
                 <Button title="Decline" variant="ghost" disabled={busy} onPress={() => void act(() => declineChallenge(d.id))} />
               </>
             )}
@@ -807,7 +809,9 @@ function notificationText(n: NotificationRow): string {
 }
 export function openNotification(n: { kind: string; challenge_id?: string | null; challengeId?: string | null; actor?: Person | null }) {
   const cid = n.challenge_id ?? n.challengeId ?? null;
-  if (cid) nav.push({ name: 'challenge', id: cid });
+  // Challenges waiting on you open the list (Accept / Play are there); results open the challenge.
+  if (cid && (n.kind === 'challenge_received' || n.kind === 'challenge_accepted' || n.kind === 'challenge_played' || n.kind === 'challenge_expiring')) nav.push({ name: 'challenges' });
+  else if (cid) nav.push({ name: 'challenge', id: cid });
   else if (n.kind === 'friend_request') nav.push({ name: 'friends' });
   else if (n.actor?.id) nav.push({ name: 'player', id: n.actor.id });
   else nav.push({ name: 'friends' });
