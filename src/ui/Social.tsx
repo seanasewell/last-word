@@ -628,7 +628,8 @@ export function ChallengeScreen({ id }: { id: string }) {
 function ResultHeader({ d }: { d: ChallengeDetail }) {
   const other: Person = d.other ?? { id: null, name: 'Deleted player', photo_url: null };
   const win = d.outcome === 'win';
-  const title = d.outcome === 'draw' ? "It's a draw" : win ? 'You win! 🏆' : `${other.name} wins 😢`;
+  // Same wording as an elimination win.
+  const title = d.outcome === 'draw' ? "It's a draw" : win ? 'You got the last word! 🏆' : `${other.name} got the last word 😢`;
   const side = (p: Person, score: number | null, lead: boolean) => (
     <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
       <PersonAvatar p={p} size={64} />
