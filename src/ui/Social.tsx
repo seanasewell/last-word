@@ -1,6 +1,6 @@
 // ── Friends, player profiles, 1v1 challenges, notifications, invitations ───
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Share, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
 import {
@@ -383,7 +383,6 @@ function statusLabel(c: ChallengeRow): string {
   if (c.status === 'expired') return 'Expired';
   if (c.status === 'declined') return 'Declined';
   if (c.status === 'cancelled') return 'Cancelled';
-  if (c.needs_response) return 'Wants a 1v1';
   if (c.status === 'pending') return c.other ? 'Waiting for them to accept' : 'Waiting for someone to accept your link';
   if (c.your_turn) return c.they_played ? 'Your turn · they’ve played' : 'Your turn';
   return 'Waiting for them to play';
@@ -424,8 +423,6 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
         {played > 0 && <Text style={[sub, { textAlign: 'center', marginTop: 8 }]}>{played} {played === 1 ? 'match' : 'matches'} · {Math.round((record.wins / played) * 100)}% win rate</Text>}
       </Card>
       <Button title={action.busy ? 'Sending…' : 'New challenge ⚔️'} disabled={action.busy} style={{ marginTop: 12 }} onPress={() => setPicking(true)} />
-      <Text style={[sub, { textAlign: 'center', marginTop: 6 }]}>Pick who to challenge. Once they accept, you both play the same word.</Text>
-      {action.note && <Text style={{ marginTop: 8, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{action.note}</Text>}
 
       <View style={{ flexDirection: 'row', gap: 4, padding: 4, marginTop: 18, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
         {(['active', 'history'] as const).map((t) => (
@@ -437,7 +434,7 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
           </Pressable>
         ))}
       </View>
-      {note && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{note}</Text>}
+      {(note ?? action.note) && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{note ?? action.note}</Text>}
       {list.error && <ErrorText text={list.error} onRetry={list.reload} />}
       {!list.data && !list.error && <Loading />}
 
@@ -475,7 +472,7 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
             )}
             {waiting.length > 0 && (
               <>
-                <Eyebrow>Waiting on them</Eyebrow>
+                <Eyebrow>Sent challenges</Eyebrow>
                 <View style={{ gap: 6 }}>
                   {waiting.map((c) => <ChallengeRowView key={c.id} c={c} now={now} />)}
                 </View>
@@ -521,7 +518,9 @@ function ChallengeRowView({ c, now, right }: { c: ChallengeRow; now: number; rig
       <PersonAvatar p={other} size={38} />
       <View style={{ flex: 1 }}>
         <Text numberOfLines={1} style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.white }}>{other.name}</Text>
-        <Text numberOfLines={1} style={{ fontFamily: F.bodySemi, fontSize: 12, color }}>{statusLabel(c)}<Text style={sub}>{`  ·  ${when}`}</Text></Text>
+        {c.needs_response
+          ? <Text numberOfLines={1} style={{ fontFamily: F.bodySemi, fontSize: 12, color }}>{when}</Text>
+          : <Text numberOfLines={1} style={{ fontFamily: F.bodySemi, fontSize: 12, color }}>{statusLabel(c)}<Text style={sub}>{`  ·  ${when}`}</Text></Text>}
       </View>
       {right}
     </Pressable>
@@ -753,9 +752,12 @@ export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onCl
   const query = q.trim().toLowerCase();
   const shown = friends && query ? friends.filter((f) => f.name.toLowerCase().includes(query)) : friends;
   const invite = async () => { const e = await shareFriendInvite(); if (e) setErr(e); };
+  // Room for the title, note, search and the invite button; the rest is the list.
+  const { height } = useWindowDimensions();
+  const listMax = Math.max(180, height * 0.85 - 330);
   return (
     <Sheet open={open} onClose={() => { setQ(''); onClose(); }} title="Challenge a friend">
-      <Text style={[s.body, { fontSize: 14, marginBottom: 12 }]}>They have 72 hours to accept. Nobody plays until they do.</Text>
+      <Text style={[s.body, { fontSize: 14, marginBottom: 12 }]}>They have 72 hours to accept before you play.</Text>
       {friends && friends.length > 0 && (
         <TextField value={q} onChangeText={setQ} placeholder="Search friends" autoCorrect={false} autoCapitalize="none"
           returnKeyType="search" accessibilityLabel="Search friends" style={{ height: 44, borderRadius: 12, fontSize: 16 }} />
@@ -767,18 +769,20 @@ export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onCl
         shown.length === 0 ? (
           <Text style={[sub, { marginTop: 14, textAlign: 'center', fontSize: 13 }]}>{`No friends match "${q.trim()}".`}</Text>
         ) : (
-          <View style={{ gap: 6, marginTop: 12 }}>
+          // The list scrolls; the invite button below stays put.
+          <ScrollView style={{ maxHeight: listMax, marginTop: 12 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 6, paddingBottom: 4 }}>
             {shown.map((f) => (
               <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }}
                 subtitle={f.wins + f.losses + f.draws ? `You ${recordText(f)}` : undefined}
                 onPress={() => { setQ(''); onPick({ id: f.user_id, name: f.name }); }}
                 right={<Text style={{ fontFamily: F.bodyBold, color: C.primary }}>Challenge</Text>} />
             ))}
-          </View>
+          </ScrollView>
         )
       )}
-      <Button title="Invite friends to challenge" variant="ghost" style={{ marginTop: 16 }} onPress={() => void invite()} />
-      <Text style={[sub, { textAlign: 'center', marginTop: 6 }]}>Friends need Last Word to play. Once they join, challenge them here.</Text>
+      <View style={{ marginTop: 12, marginHorizontal: -12, paddingHorizontal: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.divider, backgroundColor: C.ink850 }}>
+        <Button title="Invite friends to challenge" variant="ghost" onPress={() => void invite()} />
+      </View>
     </Sheet>
   );
 }
