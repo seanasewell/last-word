@@ -13,7 +13,7 @@ import {
 } from '@/lib/challenges';
 import { engine } from '@/lib/engine';
 import { kv } from '@/lib/kv';
-import { Avatar, Button, Card, s, Sheet, TextField, useNow } from './kit';
+import { Avatar, Button, Card, s, Sheet, TextField, toast, useNow } from './kit';
 import { nav, inviteTokenFrom } from './nav';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { sfx } from './sound';
@@ -256,7 +256,7 @@ function FriendRowView({ f }: { f: FriendRow }) {
   const action = useChallengeAction();
   return (
     <PlayerRow p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }}
-      subtitle={action.note ?? (played ? `You ${recordText(f)}` : 'No 1v1s yet')}
+      subtitle={played ? `You ${recordText(f)}` : 'No 1v1s yet'}
       right={<SmallButton title={action.busy ? 'Sending…' : 'Challenge'} disabled={action.busy} onPress={() => void action.run(() => sendChallenge({ id: f.user_id, name: f.name }))} />} />
   );
 }
@@ -304,7 +304,7 @@ export function PlayerScreen({ id }: { id: string }) {
           <View style={{ flex: 1 }}><Button title={challenge.busy ? 'Sending…' : 'Challenge ⚔️'} disabled={challenge.busy} onPress={() => void challenge.run(() => sendChallenge({ id: p.id, name: p.name }))} /></View>
         </View>
       )}
-      {(note ?? challenge.note) && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{note ?? challenge.note}</Text>}
+      {note && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{note}</Text>}
       {p.blocked && <Text style={[s.body, { textAlign: 'center', marginTop: 14 }]}>{"You've blocked this player. Unblock them in Settings → Blocked players."}</Text>}
 
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 20 }}>
@@ -366,14 +366,15 @@ export function playChallenge(challengeId: string, opponentName: string) {
 }
 
 /** A button that sends a challenge, with its own busy state and error line. */
+/** Errors (e.g. "You already have an open challenge…") show in the banner at the top; the player stays where they are. */
+const challengeError = (e: unknown) => toast.show(friendlyError(e, "Couldn't send the challenge. Try again."));
 function useChallengeAction() {
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
   const run = useCallback(async (fn: () => Promise<void>) => {
-    setBusy(true); setNote(null);
-    try { await fn(); } catch (e) { setNote(friendlyError(e, "Couldn't send the challenge. Try again.")); } finally { setBusy(false); }
+    setBusy(true);
+    try { await fn(); } catch (e) { challengeError(e); } finally { setBusy(false); }
   }, []);
-  return { busy, note, run };
+  return { busy, run };
 }
 
 function statusLabel(c: ChallengeRow): string {
@@ -441,7 +442,7 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
           </Pressable>
         ))}
       </View>
-      {(note ?? action.note) && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{note ?? action.note}</Text>}
+      {note && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{note}</Text>}
       {list.error && <ErrorText text={list.error} onRetry={list.reload} />}
       {!list.data && !list.error && <Loading />}
 
@@ -510,7 +511,7 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
       )}
 
       <ChallengePicker open={picking} onClose={() => setPicking(false)}
-        onPick={(to) => { setPicking(false); void action.run(() => sendChallenge(to)); }} />
+        onPick={async (to) => { await sendChallenge(to); setPicking(false); }} />
     </View>
   );
 }
@@ -619,7 +620,6 @@ export function ChallengeScreen({ id }: { id: string }) {
             <Button title={rematch.busy ? 'Sending…' : done ? 'Rematch' : 'Challenge again'} disabled={rematch.busy}
               onPress={() => void rematch.run(() => sendChallenge({ id: d.other!.id!, name: d.other!.name }, done ? d.id : null))} />
           )}
-          {rematch.note && <Text style={{ fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{rematch.note}</Text>}
           <Button title="Back to challenges" variant="ghost" onPress={() => nav.backTo({ name: 'challenges' })} />
         </View>
       )}
@@ -728,21 +728,17 @@ export function ChallengeOutcome({ challengeId }: { challengeId: string }) {
 /** On solo results: a way into 1v1s. The challenge uses a fresh word, not this round. */
 export function ChallengeCta() {
   const [picking, setPicking] = useState(false);
-  const action = useChallengeAction();
   return (
     <Card style={{ padding: 16, borderColor: 'rgba(61,139,255,0.45)', backgroundColor: 'rgba(61,139,255,0.10)' }}>
       <Text style={{ fontFamily: F.displayBold, fontSize: 17, color: C.white, textAlign: 'center' }}>Think a friend can beat you?</Text>
       <Text style={[sub, { textAlign: 'center', marginTop: 4 }]}>Challenge them to a 1v1. Once they accept, you both play the same new word.</Text>
-      {action.note && <Text style={{ marginTop: 8, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{action.note}</Text>}
-      <Button title={action.busy ? 'Sending…' : 'Challenge a friend ⚔️'} disabled={action.busy} style={{ marginTop: 12 }} onPress={() => setPicking(true)} />
+      <Button title="Challenge a friend ⚔️" style={{ marginTop: 12 }} onPress={() => setPicking(true)} />
       <ChallengePicker open={picking} onClose={() => setPicking(false)}
-        onPick={(to) => {
+        onPick={async (to) => {
+          await createChallenge(to.id);
           setPicking(false);
-          void action.run(async () => {
-            await createChallenge(to.id);
-            engine.goMenu();
-            nav.reset([{ name: 'challenges' }]);
-          });
+          engine.goMenu();
+          nav.reset([{ name: 'challenges' }]);
         }} />
     </Card>
   );
@@ -752,8 +748,15 @@ export function ChallengeCta() {
  * Choose a friend to challenge (searchable). Only existing players can be challenged, so
  * the other option invites people to the app; once they've joined, they can be challenged.
  */
-export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (to: { id: string; name: string }) => void }) {
+export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (to: { id: string; name: string }) => Promise<void> }) {
   const [friends, setFriends] = useState<FriendRow[] | null>(null);
+  // The sheet stays open while sending; on an error the banner shows and the list stays put.
+  const [sending, setSending] = useState<string | null>(null);
+  const pick = async (f: FriendRow) => {
+    if (sending) return;
+    setSending(f.user_id);
+    try { await onPick({ id: f.user_id, name: f.name }); setQ(''); } catch (e) { challengeError(e); } finally { setSending(null); }
+  };
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState('');
   useEffect(() => {
@@ -790,8 +793,8 @@ export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onCl
             {shown.map((f) => (
               <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }}
                 subtitle={f.wins + f.losses + f.draws ? `You ${recordText(f)}` : undefined}
-                onPress={() => { setQ(''); onPick({ id: f.user_id, name: f.name }); }}
-                right={<Text style={{ fontFamily: F.bodyBold, color: C.primary }}>Challenge</Text>} />
+                onPress={() => void pick(f)}
+                right={<Text style={{ fontFamily: F.bodyBold, color: sending === f.user_id ? w(0.5) : C.primary }}>{sending === f.user_id ? 'Sending…' : 'Challenge'}</Text>} />
             ))}
           </ScrollView>
         )

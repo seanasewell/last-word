@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
-import Animated, { Easing, SlideInDown, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, FadeOutUp, SlideInDown, SlideInUp, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { accounts, type AuthState } from '@/lib/account';
@@ -241,6 +241,39 @@ export const s = StyleSheet.create({
 
 // ── Sheets & controls ──────────────────────────────────────────────────────
 /** Bottom sheet over a dimmed backdrop. */
+// ── Top error banner ───────────────────────────────────────────────────────
+// toast.show('…') drops a short message in from the top of the screen without moving
+// the player anywhere. It also shows over open sheets.
+let toastState: { text: string; id: number } | null = null;
+let toastSeq = 0;
+const toastSubs = new Set<() => void>();
+export const toast = {
+  show(text: string) { toastState = { text, id: ++toastSeq }; toastSubs.forEach((f) => f()); },
+  clear() { toastState = null; toastSubs.forEach((f) => f()); },
+};
+const subscribeToast = (f: () => void) => { toastSubs.add(f); return () => { toastSubs.delete(f); }; };
+
+export function TopToast() {
+  const cur = useSyncExternalStore(subscribeToast, () => toastState, () => toastState);
+  const insets = useSafeAreaInsets();
+  useEffect(() => {
+    if (!cur) return;
+    const t = setTimeout(() => { if (toastState?.id === cur.id) toast.clear(); }, 3500);
+    return () => clearTimeout(t);
+  }, [cur]);
+  if (!cur) return null;
+  return (
+    <Animated.View key={cur.id} entering={SlideInUp.duration(220).easing(Easing.out(Easing.cubic))} exiting={FadeOutUp.duration(160)}
+      pointerEvents="box-none" style={{ position: 'absolute', left: 12, right: 12, top: insets.top + 8, zIndex: 100 }}>
+      <Pressable onPress={() => toast.clear()} accessibilityRole="alert" accessibilityLiveRegion="polite"
+        style={{ borderRadius: 16, backgroundColor: '#3A1820', borderWidth: 1, borderColor: 'rgba(255,93,115,0.5)', paddingHorizontal: 16, paddingVertical: 12,
+          shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8 }}>
+        <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white, textAlign: 'center' }}>{cur.text}</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 /** `tall`: a fixed near-full-height sheet, so it keeps its size (e.g. while a search filters its list behind the keyboard). */
 export function Sheet({ open, onClose, title, children, tall = false }: { open: boolean; onClose: () => void; title?: string; children: React.ReactNode; tall?: boolean }) {
   // Drag the handle (or title) down to dismiss; a short drag springs back.
@@ -274,6 +307,7 @@ export function Sheet({ open, onClose, title, children, tall = false }: { open: 
             {children}
           </Animated.View>
         </Animated.View>
+        <TopToast />
       </View>
     </Modal>
   );

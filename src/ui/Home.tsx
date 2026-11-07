@@ -8,7 +8,7 @@ import { social, useSocial } from '@/lib/challenges';
 import { engine, type GameState } from '@/lib/engine';
 import { fetchModeLeaderboard, type Leaderboard, type RankEntry, type RankMode, type Scope } from '@/lib/ranks';
 import { countryByCode } from '@/lib/regions';
-import { Avatar, Card, FadeUp, HEADER_SIDE, HeaderLogo, ordinal, s, Screen, useNow } from './kit';
+import { Avatar, Card, FadeUp, HEADER_SIDE, HeaderLogo, ordinal, s, Screen, TopToast, useNow } from './kit';
 import { nav, useNav, type Route } from './nav';
 import { DailyChallenges, LevelCard, RewardsTab, StreakCard, SweepBorder } from './Progress';
 import { MatchFaces } from './MatchFaces';
@@ -518,6 +518,7 @@ export function Home({ s: g, account }: { s: GameState; account: Account }) {
           <RoutePage route={top} account={account} />
         </Animated.View>
       )}
+      <TopToast />
     </View>
   );
 }
