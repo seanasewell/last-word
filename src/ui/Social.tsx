@@ -453,7 +453,7 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
           <>
             {invites.length > 0 && (
               <>
-                <Eyebrow right={`${invites.length}`}>Challenges for you</Eyebrow>
+                <Eyebrow right={`${invites.length}`}>Challenges</Eyebrow>
                 <View style={{ gap: 6 }}>
                   {invites.map((c) => (
                     <ChallengeRowView key={c.id} c={c} now={now}
