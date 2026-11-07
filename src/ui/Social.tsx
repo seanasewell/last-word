@@ -163,7 +163,7 @@ export function FriendsScreen() {
 
       <Eyebrow>Find players</Eyebrow>
       <TextField value={q} onChangeText={setQ} placeholder="Search by name" autoCorrect={false} autoCapitalize="none"
-        returnKeyType="search" accessibilityLabel="Search players by name" style={{ height: 46, borderRadius: 14, fontSize: 16 }} />
+        returnKeyType="search" accessibilityLabel="Search players by name" style={{ height: 46, borderRadius: 14, fontSize: 16, fontFamily: F.body, letterSpacing: 0 }} />
       {searchErr && <ErrorText text={searchErr} />}
       {shown && shown.length === 0 && <Text style={[sub, { marginTop: 10, textAlign: 'center' }]}>No players found.</Text>}
       {shown && shown.length > 0 && (
@@ -798,7 +798,7 @@ export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onCl
     <Sheet open={open} onClose={() => { setQ(''); onClose(); }} title="Challenge a friend" tall>
       {friends && friends.length > 0 && (
         <TextField value={q} onChangeText={setQ} placeholder="Search friends" autoCorrect={false} autoCapitalize="none"
-          returnKeyType="search" accessibilityLabel="Search friends" style={{ height: 44, borderRadius: 12, fontSize: 16 }} />
+          returnKeyType="search" accessibilityLabel="Search friends" style={{ height: 44, borderRadius: 12, fontSize: 16, fontFamily: F.body, letterSpacing: 0 }} />
       )}
       {err && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral }}>{err}</Text>}
       {!friends && !err && <Loading />}
