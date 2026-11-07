@@ -23,7 +23,7 @@ function PageScroll({ children, gold = false, footer }: { children: React.ReactN
         // Pinned over the page: the content scrolls underneath it.
         <View onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
           style={{ position: 'absolute', left: 0, right: 0, bottom: 0, gap: 10, paddingHorizontal: 12, paddingTop: 14, paddingBottom: insets.bottom + 12,
-            backgroundColor: C.ink850, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderColor: w(0.08),
+            backgroundColor: C.ink850, borderTopLeftRadius: 24, borderTopRightRadius: 24,
             shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: -6 }, elevation: 16 }}>
           {footer}
         </View>
