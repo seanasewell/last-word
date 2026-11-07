@@ -228,7 +228,7 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
   if (youOut) {
     const remaining = g.players.filter((p) => p.status === 'active');
     return (
-      <PageScroll>
+      <PageScroll footer={<ResultActions shareTitle="" onAgain={() => engine.startMatch()} exitTitle="Back to lobby" onExit={() => engine.goMenu()} />}>
         <View style={{ alignItems: 'center', paddingTop: 24 }}>
           <Avatar player={me} size={84} dim />
           <Text style={[s.h1, { fontSize: 34, textAlign: 'center', marginTop: 18 }]}>{"You've been eliminated"}</Text>
@@ -248,10 +248,6 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
         <Text style={[s.eyebrow, { marginTop: 22, marginBottom: 8 }]}>Still in · {remaining.length} players</Text>
         <View style={{ gap: 6 }}>
           {remaining.map((p) => <Row key={p.id} p={p} onPress={actOn(p)} right={<Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65) }}>{p.totalScore} total</Text>} />)}
-        </View>
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 'auto', paddingTop: 24 }}>
-          <Button title="Back to lobby" variant="ghost" style={{ flex: 1 }} onPress={() => afterGame(() => engine.goMenu())} />
-          <Button title="Play again" style={{ flex: 1 }} onPress={() => afterGame(() => engine.startMatch())} />
         </View>
         {sheet}
       </PageScroll>
