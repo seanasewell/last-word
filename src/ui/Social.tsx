@@ -1,10 +1,10 @@
 // ── Friends, player profiles, 1v1 challenges, notifications, invitations ───
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
 import {
-  acceptChallenge, acceptFriendInvite, ago, cancelChallenge, challengeDetail, claimChallenge, createChallenge, createFriendInvite, declineChallenge,
+  acceptChallenge, acceptFriendInvite, ago, cancelChallenge, challengeDetail, createChallenge, createFriendInvite, declineChallenge,
   friendlyError, INVITE_MESSAGE, inviteUrl, markNotificationsRead, myChallenges, myFriends, myNotifications,
   personAvatar, playerProfile, recordText, removeFriend, resolveInvite, respondFriendRequest, searchPlayers,
   sendFriendRequest, social, timeLeft, useSocial,
@@ -383,7 +383,7 @@ function statusLabel(c: ChallengeRow): string {
   if (c.status === 'expired') return 'Expired';
   if (c.status === 'declined') return 'Declined';
   if (c.status === 'cancelled') return 'Cancelled';
-  if (c.status === 'pending') return c.other ? 'Waiting for them to accept' : 'Waiting for someone to accept your link';
+  if (c.status === 'pending') return 'Waiting for them to accept';
   if (c.your_turn) return c.they_played ? 'Your turn · they’ve played' : 'Your turn';
   return 'Waiting for them to play';
 }
@@ -504,7 +504,7 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
 }
 
 function ChallengeRowView({ c, now, right }: { c: ChallengeRow; now: number; right?: React.ReactNode }) {
-  const other: Person = c.other ?? { id: null, name: 'Anyone with your link', photo_url: null };
+  const other: Person = c.other ?? { id: null, name: 'Deleted player', photo_url: null };
   const done = c.status === 'completed';
   const color = done ? (c.outcome === 'win' ? C.mint : c.outcome === 'loss' ? C.coral : C.amber)
     : c.needs_response || c.your_turn ? C.amber : w(0.65);
@@ -536,7 +536,7 @@ export function ChallengeScreen({ id }: { id: string }) {
   const rematch = useChallengeAction();
   if (error) return <ErrorText text={error} onRetry={reload} />;
   if (!d) return <Loading />;
-  const other: Person = d.other ?? { id: null, name: 'Anyone with your link', photo_url: null };
+  const other: Person = d.other ?? { id: null, name: 'Deleted player', photo_url: null };
   const done = d.status === 'completed';
   const open = d.status === 'pending' || d.status === 'accepted';
   const act = async (fn: () => Promise<void>) => {
@@ -550,8 +550,8 @@ export function ChallengeScreen({ id }: { id: string }) {
   else if (d.status === 'cancelled') { title = 'Challenge cancelled'; body = 'No win or loss for either player.'; }
   else if (d.needs_response) { title = `${other.name} challenged you`; body = 'Accept to unlock the round. You both get the same word, 60 seconds and one try.'; }
   else if (d.status === 'pending') {
-    title = d.other ? `Waiting for ${other.name} to accept` : 'Waiting for someone to accept';
-    body = d.other ? 'The round unlocks for both of you once they accept.' : 'Share your link. The first person to accept plays you.';
+    title = `Waiting for ${other.name} to accept`;
+    body = 'The round unlocks for both of you once they accept.';
   } else if (d.your_turn) {
     title = 'Your round is ready';
     body = d.they_played
@@ -842,13 +842,11 @@ export function InviteScreen({ token }: { token: string }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const inviter = inv?.inviter ?? null;
-  const expires = useMemo(() => (inv?.expires_at ? timeLeft(inv.expires_at) : null), [inv]);
   if (error) return <ErrorText text={error} onRetry={reload} />;
   if (!inv) return <Loading />;
 
   const bad: Record<string, [string, string]> = {
     expired: ['This invite has expired', 'Ask your friend to send a new one.'],
-    taken: ['This challenge was already taken', 'Someone else accepted it first. Ask your friend for a new challenge.'],
     unavailable: ['Player unavailable', "This invite can't be used."],
     invalid: ['Invite link not found', 'Check the link and try again.'],
     own: ['This is your own invite', 'Share it with a friend instead.'],
@@ -859,14 +857,6 @@ export function InviteScreen({ token }: { token: string }) {
     setBusy(true); setMsg(null);
     try { await acceptFriendInvite(token); setDone(true); } catch (e) { setMsg(friendlyError(e)); } finally { setBusy(false); }
   };
-  const accept1v1 = async () => {
-    setBusy(true); setMsg(null);
-    try {
-      const id = await claimChallenge(token);
-      await acceptChallenge(id);
-      nav.reset([{ name: 'challenges' }, { name: 'challenge', id }]);
-    } catch (e) { setMsg(friendlyError(e)); } finally { setBusy(false); }
-  };
   const challengeBack = async () => {
     if (!inviter?.id) return;
     setBusy(true); setMsg(null);
@@ -876,25 +866,14 @@ export function InviteScreen({ token }: { token: string }) {
   return (
     <Card style={{ padding: 22, alignItems: 'center' }}>
       <PersonAvatar p={inviter} size={84} />
-      {inv.kind === 'friend' ? (
-        <>
-          <Text style={{ fontFamily: F.displayBold, fontSize: 22, color: C.white, marginTop: 12, textAlign: 'center' }}>{done || inv.relation === 'friends' ? `You and ${inviter?.name} are friends` : `${inviter?.name} invited you`}</Text>
-          <Text style={[s.body, { textAlign: 'center', marginTop: 6, fontSize: 14 }]}>Add them as a friend to challenge each other to 1v1s.</Text>
-          <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 16 }}>
-            {done || inv.relation === 'friends'
-              ? <Button title={busy ? 'Sending…' : `Challenge ${inviter?.name} ⚔️`} disabled={busy} onPress={() => void challengeBack()} />
-              : <Button title={busy ? 'Adding…' : 'Add friend'} disabled={busy} onPress={() => void acceptFriend()} />}
-            {inviter?.id && <Button title="View profile" variant="ghost" onPress={() => nav.push({ name: 'player', id: inviter.id! })} />}
-          </View>
-        </>
-      ) : (
-        <>
-          <Text style={{ fontFamily: F.displayBold, fontSize: 22, color: C.white, marginTop: 12, textAlign: 'center' }}>{inviter?.name} challenged you</Text>
-          <Text style={[s.body, { textAlign: 'center', marginTop: 6, fontSize: 14 }]}>Accept to unlock the round. You both get the same word, 60 seconds and one try.</Text>
-          {expires && <Text style={[sub, { marginTop: 6 }]}>{expires}</Text>}
-          <Button title={busy ? 'Accepting…' : 'Accept challenge'} disabled={busy} style={{ alignSelf: 'stretch', marginTop: 16 }} onPress={() => void accept1v1()} />
-        </>
-      )}
+      <Text style={{ fontFamily: F.displayBold, fontSize: 22, color: C.white, marginTop: 12, textAlign: 'center' }}>{done || inv.relation === 'friends' ? `You and ${inviter?.name} are friends` : `${inviter?.name} invited you`}</Text>
+      <Text style={[s.body, { textAlign: 'center', marginTop: 6, fontSize: 14 }]}>Add them as a friend to challenge each other to 1v1s.</Text>
+      <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 16 }}>
+        {done || inv.relation === 'friends'
+          ? <Button title={busy ? 'Sending…' : `Challenge ${inviter?.name} ⚔️`} disabled={busy} onPress={() => void challengeBack()} />
+          : <Button title={busy ? 'Adding…' : 'Add friend'} disabled={busy} onPress={() => void acceptFriend()} />}
+        {inviter?.id && <Button title="View profile" variant="ghost" onPress={() => nav.push({ name: 'player', id: inviter.id! })} />}
+      </View>
       {msg && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{msg}</Text>}
     </Card>
   );

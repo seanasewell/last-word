@@ -51,9 +51,9 @@ export type NotificationKind = 'friend_request' | 'friend_accepted' | 'challenge
   | 'challenge_result' | 'challenge_declined' | 'challenge_expiring';
 export interface NotificationRow { id: number; kind: NotificationKind; actor: Person; challenge_id: string | null; created_at: string; read: boolean }
 export interface InviteInfo {
-  kind: 'friend' | 'challenge' | 'unknown';
-  state: 'ok' | 'own' | 'yours' | 'expired' | 'taken' | 'unavailable' | 'invalid';
-  inviter?: Person; relation?: Relation; challenge_id?: string; expires_at?: string;
+  kind: 'friend' | 'unknown';
+  state: 'ok' | 'own' | 'expired' | 'unavailable' | 'invalid';
+  inviter?: Person; relation?: Relation;
 }
 export interface SocialCounts {
   unread: number; your_turn: number; active: number; friends: number; requests: number;
@@ -136,12 +136,11 @@ export const resolveInvite = (token: string) => call<InviteInfo>('resolve_invite
 export async function acceptFriendInvite(token: string): Promise<string> {
   const r = await call<string>('accept_friend_invite', { p_token: token }); void social.refresh(); return r;
 }
-export const claimChallenge = (token: string) => call<string>('claim_challenge', { p_token: token });
 
 // ── Challenges ──
-/** Send a challenge (or make an open one for a link). Nobody plays until it's accepted. */
-export async function createChallenge(opponentId: string | null, rematchOf?: string | null): Promise<{ id: string; token: string }> {
-  const r = await call<{ id: string; token: string }>('create_challenge', { p_opponent: opponentId, p_rematch_of: rematchOf ?? null });
+/** Challenge a friend. Nobody plays until they accept. */
+export async function createChallenge(opponentId: string, rematchOf?: string | null): Promise<{ id: string }> {
+  const r = await call<{ id: string }>('create_challenge', { p_opponent: opponentId, p_rematch_of: rematchOf ?? null });
   void social.refresh();
   return r;
 }
