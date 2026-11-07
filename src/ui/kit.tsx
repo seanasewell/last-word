@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, { Easing, SlideInDown, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -230,14 +230,36 @@ export const s = StyleSheet.create({
 // ── Sheets & controls ──────────────────────────────────────────────────────
 /** Bottom sheet over a dimmed backdrop. */
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title?: string; children: React.ReactNode }) {
+  // Drag the handle (or title) down to dismiss; a short drag springs back.
+  const drag = useSharedValue(0);
+  useEffect(() => { if (open) drag.set(0); }, [open, drag]);
+  const pan = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 3,
+    onPanResponderMove: (_, g) => { drag.set(g.dy > 0 ? g.dy : g.dy * 0.15); },
+    onPanResponderRelease: (_, g) => {
+      if (g.dy > 90 || g.vy > 0.8) {
+        drag.set(withTiming(700, { duration: 220, easing: Easing.in(Easing.quad) }));
+        setTimeout(onClose, 200);
+      } else {
+        drag.set(withSpring(0, { damping: 20, stiffness: 260 }));
+      }
+    },
+    onPanResponderTerminate: () => { drag.set(withSpring(0, { damping: 20, stiffness: 260 })); },
+  }), [drag, onClose]);
+  const dragStyle = useAnimatedStyle(() => ({ transform: [{ translateY: drag.get() }] }));
   return (
     <Modal visible={open} transparent animationType="none" onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable accessibilityLabel="Close" onPress={onClose} style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.55)' }]} />
-        <Animated.View entering={SlideInDown.duration(260).easing(Easing.out(Easing.cubic))} style={{ backgroundColor: C.ink850, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, borderColor: w(0.1), paddingHorizontal: 12, paddingTop: 10, paddingBottom: 36, maxHeight: '85%' }}>
-          <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: w(0.2), marginBottom: 16 }} />
-          {title && <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white, marginBottom: 12 }}>{title}</Text>}
-          {children}
+        <Animated.View entering={SlideInDown.duration(260).easing(Easing.out(Easing.cubic))} style={{ maxHeight: '85%' }}>
+          <Animated.View style={[{ backgroundColor: C.ink850, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 12, paddingBottom: 36 }, dragStyle]}>
+            <View {...pan.panHandlers} style={{ paddingTop: 10 }}>
+              <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: w(0.2), marginBottom: 16 }} />
+              {title && <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white, marginBottom: 12 }}>{title}</Text>}
+            </View>
+            {children}
+          </Animated.View>
         </Animated.View>
       </View>
     </Modal>

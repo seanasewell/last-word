@@ -22,11 +22,12 @@ const SOURCES = {
   win: require('@/assets/sounds/win.wav'),
   tick: require('@/assets/sounds/tick.wav'),
   join: require('@/assets/sounds/join.wav'),
+  go: require('@/assets/sounds/go.wav'),
 } as const;
 type Name = keyof typeof SOURCES;
 
 const KEY = 'lw.sound';
-const players = new Map<Name, AudioPlayer>();
+const players = new Map<string, AudioPlayer>();
 const listeners = new Set<() => void>();
 
 export const soundEnabled = () => kv.get(KEY) !== 'off';
@@ -43,15 +44,20 @@ export function onSoundChange(fn: () => void) {
 /** Set the audio mode and load every sound up front so the first play is instant. */
 export function initSound() {
   setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {});
-  (Object.keys(SOURCES) as Name[]).forEach(player);
+  (Object.keys(SOURCES) as Name[]).forEach((n) => { for (let i = 0; i < (POOLED[n] ?? 1); i++) player(n, i); });
 }
 
-function player(name: Name): AudioPlayer | null {
+/** Sounds that can fire in quick succession get a few players each, so a new play never cuts off or races the last. */
+const POOLED: Partial<Record<Name, number>> = { tick: 3, join: 4, go: 2 };
+const next = new Map<Name, number>();
+
+function player(name: Name, slot = 0): AudioPlayer | null {
+  const key = `${name}#${slot}`;
   try {
-    let p = players.get(name);
+    let p = players.get(key);
     if (!p) {
       p = createAudioPlayer(SOURCES[name]);
-      players.set(name, p);
+      players.set(key, p);
     }
     return p;
   } catch {
@@ -61,11 +67,13 @@ function player(name: Name): AudioPlayer | null {
 
 function play(name: Name) {
   if (!soundEnabled()) return;
-  const p = player(name);
+  const size = POOLED[name] ?? 1;
+  const slot = (next.get(name) ?? 0) % size;
+  next.set(name, slot + 1);
+  const p = player(name, slot);
   if (!p) return;
   try {
-    p.seekTo(0).catch(() => {});
-    p.play();
+    p.seekTo(0).then(() => p.play(), () => p.play());
   } catch { /* audio unavailable */ }
 }
 
@@ -78,4 +86,6 @@ export const sfx = {
   win: () => play('win'),
   tick: () => play('tick'),
   join: () => play('join'),
+  /** The round starts. */
+  go: () => play('go'),
 };

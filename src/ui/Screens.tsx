@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming, ZoomIn } from 'react-native-reanimated';
@@ -68,7 +68,8 @@ function BigCountdown({ endsAt, title = '', sub = 'Get your fingers ready' }: { 
   useEffect(() => {
     scale.set(1.35);
     scale.set(withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }));
-    Haptics.selectionAsync().catch(() => {});
+    // A beep and a tap on 3, 2 and 1 (the round's start plays its own "go").
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     sfx.tick();
   }, [count, scale]);
   const pop = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
@@ -112,11 +113,17 @@ const LoadingDots = () => (
 export function Lobby({ s: g }: { s: GameState }) {
   const filled = g.lobbyFilled;
   const full = filled >= 6;
-  // Each new player joining the lobby gets a small pop.
+  // Every player who joins gets a pop and a tap, even when several arrive in one update.
+  const heard = useRef(filled);
   useEffect(() => {
-    if (filled > 1) {
-      sfx.join();
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const arrivals = filled - heard.current;
+    heard.current = filled;
+    if (arrivals <= 0) return;
+    for (let i = 0; i < arrivals; i++) {
+      setTimeout(() => {
+        sfx.join();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      }, i * 160);
     }
   }, [filled]);
   return (

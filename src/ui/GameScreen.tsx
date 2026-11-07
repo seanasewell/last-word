@@ -325,6 +325,12 @@ export function GameScreen({ s: g }: { s: GameState }) {
   const now = useNow(!single, 1000);
   const started = now - g.roundStartedAt > 4000;
   const roundKey = `${g.matchId}-${g.round}`;
+  // The word is revealed: a start chime and a firm tap (once per round, not when spectating).
+  useEffect(() => {
+    if (spectating) return;
+    sfx.go();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }, [roundKey, spectating]);
 
   return (
     <Screen gold={final} padBottom={false}>
