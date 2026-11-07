@@ -383,7 +383,7 @@ function statusLabel(c: ChallengeRow): string {
   if (c.status === 'expired') return 'Expired';
   if (c.status === 'declined') return 'Declined';
   if (c.status === 'cancelled') return 'Cancelled';
-  if (c.status === 'pending') return 'Waiting for them to accept';
+  if (c.status === 'pending') return 'Pending';
   if (c.your_turn) return 'Your turn';
   return 'Waiting for them to play';
 }
@@ -404,6 +404,11 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
   const ready = all.filter((c) => isActive(c) && c.your_turn);
   const waiting = all.filter((c) => isActive(c) && !c.needs_response && !c.your_turn);
   const history = all.filter((c) => !isActive(c));
+  const cancel = async (c: ChallengeRow) => {
+    setNote(null);
+    try { await cancelChallenge(c.id); } catch (e) { setNote(friendlyError(e)); }
+    list.reload();
+  };
   const respond = async (c: ChallengeRow, accept: boolean) => {
     setNote(null);
     try {
@@ -475,7 +480,12 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
               <>
                 <Eyebrow>Sent challenges</Eyebrow>
                 <View style={{ gap: 6 }}>
-                  {waiting.map((c) => <ChallengeRowView key={c.id} c={c} now={now} />)}
+                  {waiting.map((c) => (
+                    <ChallengeRowView key={c.id} c={c} now={now}
+                      right={c.status === 'pending'
+                        ? <SmallButton title="Cancel" variant="ghost" onPress={() => void cancel(c)} />
+                        : <SmallButton title="View" variant="ghost" onPress={() => nav.push({ name: 'challenge', id: c.id })} />} />
+                  ))}
                 </View>
               </>
             )}
