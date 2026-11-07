@@ -6,7 +6,7 @@ import { decode } from 'base64-arraybuffer';
 
 import { kv } from './kv';
 import { COUNTRIES } from './regions';
-import { linkProvider, signInWithProvider, type Provider, type SocialResult } from './social';
+import { linkProvider, revokeApple, signInWithProvider, type Provider, type SocialResult } from './social';
 import { supabase } from './supabase';
 
 export interface Account {
@@ -216,6 +216,7 @@ class AccountStore {
     const a = this.state.account;
     if (!a) return null;
     await supabase.storage.from('avatars').remove([`${a.id}/avatar.jpg`]).catch(() => {});
+    if (a.provider === 'apple') await revokeApple();
     const { error } = await supabase.rpc('delete_account');
     if (error) return "Couldn't delete the account. Try again.";
     kv.remove(`lw.best.${a.id}`);

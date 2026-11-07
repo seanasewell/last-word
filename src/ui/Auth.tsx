@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { accounts } from '@/lib/account';
 import { engine } from '@/lib/engine';
 import { nameAllowed } from '@/lib/nameFilter';
-import { SHOW_DEV_TOOLS } from '@/lib/release';
+import { PRIVACY_URL, SHOW_DEV_TOOLS, TERMS_URL } from '@/lib/release';
 import type { Provider } from '@/lib/social';
 import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { AnimatedTileLogo } from './AnimatedLogo';
@@ -145,7 +145,11 @@ export function AuthFlow() {
           {error && <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 14, color: C.coral }}>{error}</Text>}
           <ProviderButtons busy={busy} onPick={(p) => { void signIn(p); }} />
           <Button title={starting || waiting ? 'Starting…' : 'Play as a guest'} variant="ghost" disabled={busy} onPress={guest} />
-          <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 12, color: w(0.6) }}>Sign in to keep your progress on any phone.</Text>
+          <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 12, lineHeight: 17, color: w(0.6) }}>
+            Sign in to keep your progress on any phone. By continuing, you agree to our{' '}
+            <Text onPress={() => { void Linking.openURL(TERMS_URL); }} style={{ color: w(0.85), textDecorationLine: 'underline' }}>Terms of use</Text> and{' '}
+            <Text onPress={() => { void Linking.openURL(PRIVACY_URL); }} style={{ color: w(0.85), textDecorationLine: 'underline' }}>Privacy policy</Text>.
+          </Text>
           {SHOW_DEV_TOOLS && (
             <Pressable onPress={() => setDev(true)} hitSlop={10} style={{ alignSelf: 'center', paddingTop: 6 }}>
               <Text style={{ fontFamily: F.bodySemi, fontSize: 12, color: w(0.6) }}>🛠 Developer controls</Text>

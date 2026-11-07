@@ -46,7 +46,7 @@ function friendly(message: string | undefined): string {
 const isGuestNow = async () => (await supabase.auth.getSession()).data.session?.user.is_anonymous === true;
 
 // ── Apple ──
-async function appleCredential(): Promise<{ token: string; nonce: string } | 'cancel' | { error: string }> {
+async function appleCredential(): Promise<{ token: string; nonce: string; code: string | null } | 'cancel' | { error: string }> {
   try {
     const nonce = Crypto.randomUUID() + Crypto.randomUUID();
     const hashed = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, nonce);
@@ -55,7 +55,7 @@ async function appleCredential(): Promise<{ token: string; nonce: string } | 'ca
       nonce: hashed,
     });
     if (!cred.identityToken) return { error: "Couldn't sign in with Apple. Try again." };
-    return { token: cred.identityToken, nonce };
+    return { token: cred.identityToken, nonce, code: cred.authorizationCode ?? null };
   } catch (e) {
     if ((e as { code?: string }).code === 'ERR_REQUEST_CANCELED') return 'cancel';
     return { error: "Couldn't sign in with Apple. Try again." };
@@ -68,7 +68,7 @@ async function apple(mode: 'link' | 'signin', captchaToken?: string | null): Pro
   if ('error' in c) return { kind: 'error', message: c.error };
   if (mode === 'link') {
     const { error } = await supabase.auth.linkIdentity({ provider: 'apple', token: c.token, nonce: c.nonce });
-    if (!error) return { kind: 'ok' };
+    if (!error) { keepAppleToken(c.code); return { kind: 'ok' }; }
     if (isConflict(error.message, error.code)) return { kind: 'conflict' };
     return { kind: 'error', message: friendly(error.message) };
   }
@@ -76,7 +76,22 @@ async function apple(mode: 'link' | 'signin', captchaToken?: string | null): Pro
     provider: 'apple', token: c.token, nonce: c.nonce,
     ...(captchaToken ? { options: { captchaToken } } : {}),
   });
-  return error ? { kind: 'error', message: friendly(error.message) } : { kind: 'ok' };
+  if (error) return { kind: 'error', message: friendly(error.message) };
+  keepAppleToken(c.code);
+  return { kind: 'ok' };
+}
+
+/**
+ * Apple asks apps to revoke Sign in with Apple when an account is deleted. The server
+ * swaps this one-time code for a token it can revoke later (see the apple-auth function).
+ */
+function keepAppleToken(code: string | null) {
+  if (code) void supabase.functions.invoke('apple-auth', { body: { action: 'store', code } }).catch(() => {});
+}
+
+/** Revoke Sign in with Apple for the signed-in player (before deleting the account). */
+export async function revokeApple(): Promise<void> {
+  await supabase.functions.invoke('apple-auth', { body: { action: 'revoke' } }).catch(() => {});
 }
 
 // ── Google (browser sheet + PKCE) ──

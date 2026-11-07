@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { accounts, weekRange, winsFor, type Account, type Period } from '@/lib/account';
 import { engine, type GameState } from '@/lib/engine';
 import { myBlocks, unblockPlayer, type BlockedPlayer } from '@/lib/moderation';
-import { PRIVACY_URL, SHOW_DEV_TOOLS, SUPPORT_URL } from '@/lib/release';
+import { PRIVACY_URL, SHOW_DEV_TOOLS, SUPPORT_URL, TERMS_URL } from '@/lib/release';
 import { fetchLeaderboard, type Leaderboard, type RankEntry, type Scope } from '@/lib/ranks';
 import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { scoreWord } from '@/lib/words';
@@ -417,8 +417,12 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
           <MenuLabel emoji="💬" text="Help and support" />
           <Text style={{ color: w(0.55) }}>↗</Text>
         </Pressable>
-        <Pressable onPress={() => { void Linking.openURL(PRIVACY_URL); }} style={[row, { borderBottomWidth: 0 }]}>
+        <Pressable onPress={() => { void Linking.openURL(PRIVACY_URL); }} style={row}>
           <MenuLabel emoji="🔒" text="Privacy policy" />
+          <Text style={{ color: w(0.55) }}>↗</Text>
+        </Pressable>
+        <Pressable onPress={() => { void Linking.openURL(TERMS_URL); }} style={[row, { borderBottomWidth: 0 }]}>
+          <MenuLabel emoji="📄" text="Terms of use" />
           <Text style={{ color: w(0.55) }}>↗</Text>
         </Pressable>
       </View>
@@ -525,6 +529,22 @@ function BlockedPlayers({ open, onClose }: { open: boolean; onClose: () => void 
   );
 }
 
+/** A short message above the tab bar (e.g. "Couldn't connect"); tap or wait to dismiss. */
+function NoticeToast({ text }: { text: string }) {
+  useEffect(() => {
+    const t = setTimeout(() => engine.clearNotice(), 5000);
+    return () => clearTimeout(t);
+  }, [text]);
+  return (
+    <Animated.View entering={FadeIn.duration(200)} style={{ position: 'absolute', left: 12, right: 12, bottom: 96 }}>
+      <Pressable onPress={() => engine.clearNotice()} accessibilityRole="alert"
+        style={{ borderRadius: 16, backgroundColor: '#3A1820', borderWidth: 1, borderColor: 'rgba(255,93,115,0.5)', paddingHorizontal: 16, paddingVertical: 12 }}>
+        <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white, textAlign: 'center' }}>{text}</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export function Home({ s: g, account }: { s: GameState; account: Account }) {
   // Keep the tab when returning from a game; start on Play after each sign-in.
   const [tab, setTabState] = useState<Tab>(() => (rememberedFor === account.id ? rememberedTab : 'play'));
@@ -548,6 +568,7 @@ export function Home({ s: g, account }: { s: GameState; account: Account }) {
           {tab === 'profile' && <ProfileTab account={account} best={g.personalBest} />}
         </Animated.View>
       </ScrollView>
+      {g.notice && <NoticeToast text={g.notice} />}
       <TabBar tab={tab} onChange={setTab} account={account} />
     </Screen>
   );

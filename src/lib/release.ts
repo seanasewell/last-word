@@ -3,5 +3,6 @@
 export const SHOW_DEV_TOOLS = __DEV__ || process.env.EXPO_PUBLIC_DEV_TOOLS === '1';
 
 export const PRIVACY_URL = 'https://seanasewell.github.io/last-word/privacy.html';
+export const TERMS_URL = 'https://seanasewell.github.io/last-word/terms.html';
 export const SUPPORT_URL = 'https://seanasewell.github.io/last-word/support.html';
 export const SUPPORT_EMAIL = 'sean@studiosewell.com';

@@ -83,6 +83,8 @@ export interface GameState {
   missedLongest: string[];
   /** The server's id for this game (online match or server-timed solo); null when played locally. */
   serverId: string | null;
+  /** A short message for the menu, e.g. when a game couldn't connect. */
+  notice: string | null;
 }
 
 // ── Server snapshot (see mm_tick) ──
@@ -181,7 +183,7 @@ export class GameEngine {
       lastElimination: null, winnerId: null, spectating: false, awaitingChoice: false,
       humanName: 'You',
       personalBest: 0,
-      newBest: false, missedLongest: [], serverId: null,
+      newBest: false, missedLongest: [], serverId: null, notice: null,
     };
   }
 
@@ -209,6 +211,14 @@ export class GameEngine {
 
   // ── intents ──
 
+  /** Couldn't reach the server: back to the menu with a message (no offline games — they'd earn nothing). */
+  private connectionFailed(t: number) {
+    if (t !== this.token) return;
+    this.goMenu();
+    this.set({ notice: "Couldn't connect. Check your connection and try again." });
+  }
+  clearNotice() { if (this.state.notice) this.set({ notice: null }); }
+
   goMenu() {
     this.solo = null;
     const o = this.online;
@@ -234,27 +244,27 @@ export class GameEngine {
     this.after(PREMATCH, () => { void this.beginSoloOnline(t); });
   }
 
-  /** Solo on the server when possible (so it earns XP); a local round otherwise. */
+  /** Solo games are timed and scored on the server (so they earn XP). */
   private async beginSoloOnline(t: number) {
     try {
       const { data: sess } = await supabase.auth.getSession();
       if (t !== this.token) return;
-      if (!sess.session) { this.beginRound(); return; }
+      if (!sess.session) { this.connectionFailed(t); return; }
       const t0 = Date.now();
       const { data, error } = await supabase.rpc('solo_start', { p_avoid: this.lastSingleSource || null });
       const t1 = Date.now();
       if (t !== this.token) return;
-      if (error || !data) { this.beginRound(); return; }
+      if (error || !data) { this.connectionFailed(t); return; }
       const g = data as { id: string; source: string; possible_words: number; started_at: string; ends_at: string; server_now: string };
       const offset = parseTs(g.server_now) - (t0 + t1) / 2;
       this.solo = { id: g.id, offset, pending: new Set() };
       this.beginRound({ source: g.source, possible: g.possible_words, startedAt: parseTs(g.started_at) - offset, endsAt: parseTs(g.ends_at) - offset, serverId: g.id });
     } catch {
-      if (t === this.token) this.beginRound();
+      this.connectionFailed(t);
     }
   }
 
-  /** Find an online match; falls back to a local one when that isn't possible. */
+  /** Find an online match (shows "Couldn't connect" on the menu if that fails). */
   startMatch() {
     this.online = null;
     this.clearTimers();
@@ -267,28 +277,6 @@ export class GameEngine {
     });
     this.solo = null;
     void this.joinOnline(this.token);
-  }
-
-  private startLocalMatch() {
-    this.online = null;
-    this.clearTimers();
-    this.matchCounted = false;
-    const human = this.makeHuman();
-    const bots = pickBots(5, human.name);
-    this.set({
-      mode: 'multi', matchId: newId(), phase: 'lobby', round: 0, source: '', usedSources: [],
-      players: [human, ...bots], lobbyFilled: 1, winnerId: null, lastElimination: null,
-      spectating: false, awaitingChoice: false, accepting: false, serverId: null,
-    });
-    let delay = 700;
-    for (let n = 2; n <= 6; n++) {
-      delay += 450 + Math.random() * 900;
-      this.after(delay, () => this.set({ lobbyFilled: n }));
-    }
-    this.after(delay + 1100, () => {
-      this.set({ phase: 'prematch', prematchEndsAt: Date.now() + PREMATCH });
-      this.after(PREMATCH, () => this.beginRound());
-    });
   }
 
   /**
@@ -544,14 +532,14 @@ export class GameEngine {
     try {
       const { data: sess } = await supabase.auth.getSession();
       if (t !== this.token) return;
-      if (!sess.session) { this.startLocalMatch(); return; }
+      if (!sess.session) { this.connectionFailed(t); return; }
       const { data, error } = await supabase.rpc('mm_join');
       if (t !== this.token) {
         // Left while joining: give the seat back.
         if (data) void supabase.rpc('mm_leave', { p_match: data });
         return;
       }
-      if (error || !data) { this.startLocalMatch(); return; }
+      if (error || !data) { this.connectionFailed(t); return; }
       this.online = {
         matchId: data as string, myPid: '', offset: 0, bestRtt: Infinity, snap: null, round: 0,
         extras: new Map(), queue: [], flushScheduled: false, choice: 'none', done: false,
@@ -559,7 +547,7 @@ export class GameEngine {
       this.set({ serverId: data as string });
       void this.poll(t, this.online);
     } catch {
-      if (t === this.token) this.startLocalMatch();
+      this.connectionFailed(t);
     }
   }
 
