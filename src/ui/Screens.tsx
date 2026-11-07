@@ -1,6 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming, ZoomIn } from 'react-native-reanimated';
 
 import { engine, HUMAN_ID, TOTAL_ROUNDS, type GameState } from '@/lib/engine';
@@ -12,10 +13,21 @@ import { ShareButton } from './Share';
 import { sfx } from './sound';
 import { C, F, w } from './theme';
 
-function PageScroll({ children, gold = false }: { children: React.ReactNode; gold?: boolean }) {
+function PageScroll({ children, gold = false, footer }: { children: React.ReactNode; gold?: boolean; footer?: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
+  const [footerH, setFooterH] = useState(0);
   return (
-    <Screen gold={gold}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 20 }}>{children}</ScrollView>
+    <Screen gold={gold} padBottom={!footer}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 12, paddingTop: 12, paddingBottom: footer ? footerH + 16 : 20 }}>{children}</ScrollView>
+      {footer && (
+        // Pinned over the page: the content scrolls underneath it.
+        <View onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, gap: 10, paddingHorizontal: 12, paddingTop: 14, paddingBottom: insets.bottom + 12,
+            backgroundColor: C.ink850, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderColor: w(0.08),
+            shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: -6 }, elevation: 16 }}>
+          {footer}
+        </View>
+      )}
     </Screen>
   );
 }
@@ -310,18 +322,19 @@ export function FinalResults({ s: g }: { s: GameState }) {
   }, [youWon, g.matchId]);
   return (
     <View style={{ flex: 1 }}>
-      <PageScroll gold>
+      <PageScroll gold footer={(
+        <>
+          {youWon && <ShareButton variant="gold" title="Share your win" data={{ kind: 'match', name: me.name, points: me.totalScore, bestWord: me.stats.bestWord, wordsFound: me.stats.wordsFound }} />}
+          <Button title="Play again" onPress={() => afterCelebration(() => engine.startMatch())} />
+          <Button title="Back to lobby" variant="ghost" onPress={() => afterCelebration(() => engine.goMenu())} />
+        </>
+      )}>
         <FadeUp style={{ alignItems: 'center', paddingTop: 20 }}>
           <Text style={{ fontSize: 44, marginBottom: -18, marginTop: 4, zIndex: 2 }}>👑</Text>
           <Avatar player={winner} size={104} ring />
           <Text style={[s.h1, { fontSize: 30, textAlign: 'center', marginTop: 18 }]}>{youWon ? 'You got the last word!' : `${winner.name} got the last word`}</Text>
         </FadeUp>
-        {youWon && (
-          <View style={{ marginTop: 22 }}>
-            <ShareButton variant="primary" title="Share your win" data={{ kind: 'match', name: me.name, points: me.totalScore, bestWord: me.stats.bestWord, wordsFound: me.stats.wordsFound }} />
-          </View>
-        )}
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: youWon ? 12 : 22 }}>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 22 }}>
           <Stat compact label="Match score" value={total} color={C.amber} />
           <Stat compact label="Words found" value={winner.stats.wordsFound} />
           <Stat compact label="XP earned" value={xpEarned} color={C.sky} />
@@ -347,10 +360,6 @@ export function FinalResults({ s: g }: { s: GameState }) {
             <Row key={p.id} p={p} rank={ordinal(p.placement ?? 0)} highlight={p.id === winner.id ? 'gold' : p.id === HUMAN_ID ? 'you' : undefined}
               sub={p.placement === 1 ? 'Winner' : `Out round ${p.eliminatedInRound}`} right={num(p.totalScore)} onPress={actOn(p)} />
           ))}
-        </View>
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 'auto', paddingTop: 24 }}>
-          <Button title="Back to lobby" variant="ghost" style={{ flex: 1 }} onPress={() => afterCelebration(() => engine.goMenu())} />
-          <Button title="Play again" variant="gold" style={{ flex: 1 }} onPress={() => afterCelebration(() => engine.startMatch())} />
         </View>
         {sheet}
       </PageScroll>
