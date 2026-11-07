@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Linking, Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -14,6 +14,7 @@ import { cleanName, DevControls, NAME_MAX, nameError } from './Auth';
 import { Avatar, Button, Card, FadeUp, OptionSheet, ordinal, s, Screen, Sheet, TextField, TileLogo, Toggle, useNow } from './kit';
 import { pickPhoto } from './photo';
 import { DailyChallenges, LevelCard, LevelingGuide, RewardsTab, SweepBorder } from './Progress';
+import { MatchFaces } from './MatchFaces';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { PROVIDER_NAME, SaveProgressCard, SaveProgressNudge } from './SignIn';
 import { onSoundChange, setSoundEnabled, soundEnabled } from './sound';
@@ -71,6 +72,7 @@ function FullWidthLogo() {
 
 /** The elimination card's see-through blue as it looks over the screen's background, for the avatar rings. */
 const MATCH_CARD_BLUE = '#11274D';
+const MATCH_FACTS = [['👨', '6 players'], ['🕐', '5 rounds · 60 seconds each']] as const;
 
 function PlayTab({ best, account }: { best: number; account: Account }) {
   return (
@@ -84,13 +86,19 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
         <Pressable onPress={() => engine.startMatch()} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
           <View style={{ borderRadius: 24, backgroundColor: C.card, padding: 22 }}>
             <SweepBorder radius={24} />
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontFamily: F.displayBold, fontSize: 24, color: C.white }}>Elimination match</Text>
-              <View style={{ flexDirection: 'row' }}>
-                {MATCH_FACES.map((src, i) => <Image key={i} source={src} style={{ width: 26, height: 26, borderRadius: 13, marginLeft: i ? -8 : 0, borderWidth: 2, borderColor: MATCH_CARD_BLUE }} />)}
-              </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Text style={{ fontFamily: F.displayBold, fontSize: 22, color: C.white }}>Elimination</Text>
+              <MatchFaces faces={MATCH_FACES} ring={MATCH_CARD_BLUE} />
             </View>
-            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>6 players · 5 rounds · 60 seconds each. Lowest score each round is out.</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 6, rowGap: 2, marginTop: 6 }}>
+              {MATCH_FACTS.map(([e, t]) => (
+                <View key={t} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={{ fontSize: 13 }}>{e}</Text>
+                  <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>{t}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>Lowest score of each round is out.</Text>
             <View style={{ alignSelf: 'flex-start', marginTop: 16, backgroundColor: C.primary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 9 }}>
               <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>Find a match →</Text>
             </View>
