@@ -63,7 +63,8 @@ const BELL_SIZE = 40;
 const BELL_GAP = 12;
 function HeaderLogo() {
   const { width } = useWindowDimensions();
-  const avail = Math.min(width, 480) - 24 - BELL_SIZE - BELL_GAP;
+  // About 60% of the row, left-aligned, with the bell on the right.
+  const avail = (Math.min(width, 480) - 24 - BELL_SIZE - BELL_GAP) * 0.6;
   const gap = Math.max(2, Math.round((avail / 8.91) * 0.13));
   const size = Math.floor(((avail - 7 * gap) / 8) * 100) / 100;
   return <TileLogo size={size} />;
@@ -96,7 +97,7 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
   const yourTurn = c?.your_turn ?? 0;
   return (
     <View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: BELL_GAP, paddingTop: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: BELL_GAP, paddingTop: 8 }}>
         <HeaderLogo />
         <Bell />
       </View>
