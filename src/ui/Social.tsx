@@ -1,6 +1,6 @@
 // ── Friends, player profiles, 1v1 challenges, notifications, invitations ───
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Keyboard, Pressable, ScrollView, Share, Text, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
 import {
@@ -13,7 +13,7 @@ import {
 } from '@/lib/challenges';
 import { engine } from '@/lib/engine';
 import { kv } from '@/lib/kv';
-import { Avatar, Button, Card, s, Sheet, TextField, toast, useNow } from './kit';
+import { Avatar, Button, Card, s, Sheet, TextField, Tile, toast, useNow } from './kit';
 import { nav, inviteTokenFrom } from './nav';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { sfx } from './sound';
@@ -602,7 +602,8 @@ export function ChallengeScreen({ id }: { id: string }) {
         </Card>
       )}
 
-      {d.source && <Text style={[sub, { textAlign: 'center', marginTop: 12 }]}>Word: <Text style={{ fontFamily: F.bodyBold, color: C.white }}>{d.source}</Text></Text>}
+
+      {d.source && <SourceTiles source={d.source} />}
 
       {done && <WordCompare mine={d.my_words} theirs={d.their_words ?? []} otherName={other.name} />}
       {!done && d.my_words.length > 0 && (
@@ -652,6 +653,24 @@ function ResultHeader({ d }: { d: ChallengeDetail }) {
       )}
       {d.h2h && <Text style={[sub, { textAlign: 'center', marginTop: 12 }]}>Head to head: {recordText(d.h2h)}</Text>}
     </Card>
+  );
+}
+
+/** The challenge's word or phrase as letter tiles, one row per word, sized to fit the screen. */
+function SourceTiles({ source }: { source: string }) {
+  const { width } = useWindowDimensions();
+  const words = source.toUpperCase().split(/\s+/).filter(Boolean);
+  const longest = Math.max(...words.map((x) => x.length), 1);
+  const gap = 4;
+  const size = Math.min(30, Math.floor((Math.min(width, 480) - 24 - (longest - 1) * gap) / longest));
+  return (
+    <View style={{ alignItems: 'center', gap: 6, marginTop: 18 }} accessibilityLabel={`Word: ${source}`}>
+      {words.map((word, wi) => (
+        <View key={wi} style={{ flexDirection: 'row', gap }}>
+          {word.split('').map((ch, i) => <Tile key={i} ch={ch} size={size} animate={false} />)}
+        </View>
+      ))}
+    </View>
   );
 }
 
