@@ -48,6 +48,9 @@ export function initSound() {
   (Object.keys(SOURCES) as Name[]).forEach((n) => { for (let i = 0; i < (POOLED[n] ?? 1); i++) player(n, i); });
   trackPlayer('rounds');
   trackPlayer('championship');
+  (Object.keys(RESULTS) as ResultMusic[]).forEach((k) => {
+    try { const p = createAudioPlayer(RESULTS[k]); p.volume = MUSIC_VOLUME; resultPlayers.set(k, p); } catch { /* audio unavailable */ }
+  });
 }
 
 // ── Background music ──
@@ -55,6 +58,8 @@ export function initSound() {
 // elimination rounds 1–4, "championship" for the final 1v1. A track starts when its round
 // begins and keeps looping through the breaks between rounds and on the results; moving to the
 // championship crossfades to its track, and back on the menu the music fades out.
+// Between rounds and after the championship, the track pauses and a 10-second result song
+// plays instead: "win" if you got through (or won), "loss" if you were knocked out.
 // Its own setting; paused in the background.
 export type MusicTrack = 'rounds' | 'championship';
 const MUSIC_KEY = 'lw.music';
@@ -64,6 +69,13 @@ const TRACKS: Record<MusicTrack, number> = {
   championship: require('@/assets/sounds/championship.m4a'),
 };
 const musicPlayers = new Map<MusicTrack, AudioPlayer>();
+export type ResultMusic = 'win' | 'loss';
+const RESULTS: Record<ResultMusic, number> = {
+  win: require('@/assets/sounds/win.m4a'),
+  loss: require('@/assets/sounds/loss.m4a'),
+};
+const resultPlayers = new Map<ResultMusic, AudioPlayer>();
+let resultOn = false;
 const fades = new Map<MusicTrack, ReturnType<typeof setInterval>>();
 let musicHooked = false;
 let inGame = false;
@@ -74,7 +86,8 @@ export const musicEnabled = () => kv.get(MUSIC_KEY) !== 'off';
 export function setMusicEnabled(on: boolean) {
   kv.set(MUSIC_KEY, on ? 'on' : 'off');
   listeners.forEach((l) => l());
-  if (on && inGame) resumeMusic(); else if (!on) musicPlayers.forEach((m) => m.pause());
+  if (on && inGame && !resultOn) resumeMusic();
+  else if (!on) { musicPlayers.forEach((m) => m.pause()); stopResultMusic(); }
 }
 
 function trackPlayer(track: MusicTrack): AudioPlayer | null {
@@ -89,7 +102,8 @@ function trackPlayer(track: MusicTrack): AudioPlayer | null {
     if (!musicHooked) {
       musicHooked = true;
       AppState.addEventListener('change', (s) => {
-        if (s === 'active') { if (inGame) resumeMusic(); } else musicPlayers.forEach((p) => p.pause());
+        if (s === 'active') { if (inGame && !resultOn) resumeMusic(); }
+        else { musicPlayers.forEach((p) => p.pause()); stopResultMusic(); }
       });
     }
     return m;
@@ -127,7 +141,9 @@ function resumeMusic() {
  * music runs straight through rounds 1–4); switching track fades the other one out.
  */
 export function startGameMusic(gameId: string, track: MusicTrack) {
-  if (inGame && currentGame === gameId && currentTrack === track) return;
+  stopResultMusic();
+  // Same game and track (the next round): carry on from where it paused.
+  if (inGame && currentGame === gameId && currentTrack === track) { resumeMusic(); return; }
   currentGame = gameId;
   inGame = true;
   musicPlayers.forEach((_, t) => { if (t !== track) fadeOut(t); });
@@ -138,8 +154,28 @@ export function startGameMusic(gameId: string, track: MusicTrack) {
   m.seekTo(0).then(resumeMusic, resumeMusic);
 }
 
+function stopResultMusic() {
+  resultOn = false;
+  resultPlayers.forEach((p) => p.pause());
+}
+
+/** A round's result: pause the game track (it picks up again next round) and play the result song once. */
+export function playResultMusic(kind: ResultMusic) {
+  if (currentTrack) fadeOut(currentTrack);
+  stopResultMusic();
+  if (!musicEnabled() || AppState.currentState !== 'active') return;
+  try {
+    let p = resultPlayers.get(kind);
+    if (!p) { p = createAudioPlayer(RESULTS[kind]); p.volume = MUSIC_VOLUME; resultPlayers.set(kind, p); }
+    const player = p;
+    resultOn = true;
+    player.seekTo(0).then(() => { if (resultOn) player.play(); }, () => { if (resultOn) player.play(); });
+  } catch { /* audio unavailable */ }
+}
+
 /** Back on the menu: fade the music out. */
 export function stopGameMusic() {
+  stopResultMusic();
   inGame = false;
   currentGame = null;
   if (currentTrack) fadeOut(currentTrack);

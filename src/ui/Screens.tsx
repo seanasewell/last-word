@@ -10,7 +10,7 @@ import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Stat, Tile, useAnimat
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { ProgressHint, XpChip, afterGame, usePendingXp } from './Progress';
 import { ShareButton } from './Share';
-import { sfx } from './sound';
+import { musicEnabled, sfx } from './sound';
 import { C, F, w } from './theme';
 
 function PageScroll({ children, gold = false, footer }: { children: React.ReactNode; gold?: boolean; footer?: React.ReactNode }) {
@@ -215,10 +215,12 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
   useEffect(() => {
     if (e.playerId === HUMAN_ID) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      sfx.eliminated();
+      // The result song replaces this jingle when music is on.
+      if (!musicEnabled()) sfx.eliminated();
     } else if (me.status === 'active') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      sfx.survive();
+      // The result song replaces this jingle when music is on.
+      if (!musicEnabled()) sfx.survive();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g.matchId, e.round]);
@@ -340,7 +342,8 @@ export function FinalResults({ s: g }: { s: GameState }) {
   useEffect(() => {
     if (youWon) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      sfx.win();
+      // The result song replaces this jingle when music is on.
+      if (!musicEnabled()) sfx.win();
     }
   }, [youWon, g.matchId]);
   return (

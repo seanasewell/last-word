@@ -5,13 +5,13 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { accounts } from '@/lib/account';
 import { ads } from '@/lib/ads';
 import { purchases } from '@/lib/purchases';
-import { engine } from '@/lib/engine';
+import { engine, HUMAN_ID } from '@/lib/engine';
 import { progress } from '@/lib/progress';
 import { AuthFlow, Onboarding } from './Auth';
 import { GameScreen } from './GameScreen';
 import { Home } from './Home';
 import { useAuth, useGame } from './kit';
-import { startGameMusic, stopGameMusic } from './sound';
+import { playResultMusic, startGameMusic, stopGameMusic } from './sound';
 import { CelebrationHost } from './Progress';
 import { SimulatedAdHost } from './RemoveAds';
 import { EliminationScreen, FinalResults, Lobby, SoloCountdown, SoloResults } from './Screens';
@@ -68,6 +68,15 @@ export function LastWordApp() {
   const gameKey = inRound ? g.matchId : null;
   useEffect(() => { if (gameKey) startGameMusic(gameKey, musicTrack); }, [gameKey, musicTrack]);
   useEffect(() => { if (g.phase === 'menu' || g.phase === 'lobby' || g.phase === 'sp-countdown') stopGameMusic(); }, [g.phase]);
+  // Round results: the win song if you got through or won the championship, the loss song if you
+  // were knocked out. Nothing while spectating (the game track keeps playing).
+  const out = g.lastElimination;
+  const result = (g.phase === 'elimination' || g.phase === 'final') && out
+    ? (g.phase === 'final' && g.winnerId === HUMAN_ID) || (g.phase === 'elimination' && out.playerId !== HUMAN_ID && g.players.find((p) => p.id === HUMAN_ID)?.status === 'active')
+      ? 'win' : out.playerId === HUMAN_ID ? 'loss' : null
+    : null;
+  const resultKey = result && out ? `${g.matchId}:${out.round}:${result}` : null;
+  useEffect(() => { if (resultKey && result) playResultMusic(result); }, [resultKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   let key: string;
   let screen: React.ReactNode;
