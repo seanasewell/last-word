@@ -6,7 +6,7 @@ import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDe
 
 import { engine, HUMAN_ID, TOTAL_ROUNDS, type GameState } from '@/lib/engine';
 import type { Player } from '@/lib/players';
-import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Stat, Tile, useAnimatedNumber, useCountdown, BotBadge, isBot } from './kit';
+import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Stat, Tile, useAnimatedNumber, useCountdown, useNow, BotBadge, isBot } from './kit';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { ProgressHint, XpChip, afterCelebration, usePendingXp } from './Progress';
 import { ShareButton } from './Share';
@@ -126,6 +126,9 @@ const LoadingDots = () => (
 export function Lobby({ s: g }: { s: GameState }) {
   const filled = g.lobbyFilled;
   const full = filled >= 6;
+  // The server leaves a short pause after the last player joins; the 3-2-1 shows only for the final 3 seconds.
+  const now = useNow(g.phase === 'prematch', 100);
+  const showCountdown = g.phase === 'prematch' && g.prematchEndsAt - now <= 3000;
   // Every player who joins gets a pop and a tap, even when several arrive in one update.
   const heard = useRef(filled);
   useEffect(() => {
@@ -182,7 +185,7 @@ export function Lobby({ s: g }: { s: GameState }) {
           })}
         </View>
       </ScrollView>
-      {g.phase === 'prematch' && (
+      {showCountdown && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,10,22,0.88)', alignItems: 'center', justifyContent: 'center' }]}>
           <BigCountdown endsAt={g.prematchEndsAt} title="Round 1 starts in" />
         </View>
