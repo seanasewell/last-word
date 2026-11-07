@@ -423,8 +423,7 @@ export function CelebrationHost() {
         {c && (
           <Animated.View entering={ZoomIn.duration(320)} style={{ width: '100%', maxWidth: 420, maxHeight: '100%', borderRadius: 28, borderWidth: 1, borderColor: w(0.1), backgroundColor: C.ink850, overflow: 'hidden' }}>
             <ScrollView contentContainerStyle={{ alignItems: 'center', paddingHorizontal: 16, paddingTop: 28, paddingBottom: 8 }}>
-              <Text style={{ fontSize: 44 }}>{levelUp ? '🎉' : '🏅'}</Text>
-              <Text style={{ marginTop: 8, fontFamily: F.displayBold, fontSize: 24, color: C.white, textAlign: 'center' }}>{levelUp ? 'Level up!' : 'Achievements unlocked!'}</Text>
+              <Text style={{ fontFamily: F.displayBold, fontSize: 24, color: C.white, textAlign: 'center' }}>{levelUp ? 'Level up! 🎉' : 'Achievements unlocked! 🏅'}</Text>
               {levelUp && (
                 <>
                   <View style={{ marginTop: 20 }}><LevelBadge level={c.levelTo} size={80} /></View>
@@ -441,7 +440,6 @@ export function CelebrationHost() {
                       <View key={a.id} style={[s.card, { alignItems: 'center', gap: 6, paddingVertical: 20, paddingHorizontal: 16, borderRadius: 20 }]}>
                         <Badge v={viewAchievement(p, a)} size={72} />
                         <Text style={{ marginTop: 6, fontFamily: F.bodyBold, fontSize: 16, color: C.white, textAlign: 'center' }}>{a.name}</Text>
-                        {a.desc !== a.name && <Text style={{ fontFamily: F.body, fontSize: 13, color: w(0.7), textAlign: 'center' }}>{a.desc}</Text>}
                         <Text style={{ marginTop: 2, fontFamily: F.bodyBold, fontSize: 14, color: C.amber }}>+{a.xp} XP</Text>
                       </View>
                     ))}
