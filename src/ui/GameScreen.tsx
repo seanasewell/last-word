@@ -200,7 +200,8 @@ function LeaderRow({ p, rank, last, showDanger }: { p: Player; rank: number; las
   const isYou = p.id === HUMAN_ID;
   const y = useSharedValue(rank * ROW);
   useEffect(() => {
-    y.set(withSpring(rank * ROW, { damping: 18, stiffness: 140 }));
+    // Same easing as the web version: glides into place without overshooting the board.
+    y.set(withTiming(rank * ROW, { duration: 500, easing: Easing.bezier(0.2, 0.8, 0.2, 1) }));
   }, [rank, y]);
   const slide = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
   const prev = useRef(p.roundScore);
