@@ -403,28 +403,32 @@ function ChallengeResults({ g, challengeId }: { g: GameState; challengeId: strin
     </>
   );
   return (
-    <PageScroll footer={footer}>
-      <FadeUp style={{ paddingTop: 12 }}>
-        <ChallengeOutcome d={d} err={err} myWords={me.roundWords}
-          stats={(
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-              <Stat label="Words found" value={`${me.roundWords.length} / ${g.possibleWords}`} />
-              <Stat label="Longest word" value={me.stats.longestWord ? me.stats.longestWord.toUpperCase() : '—'} />
+    <View style={{ flex: 1 }}>
+      <PageScroll footer={footer}>
+        <FadeUp style={{ paddingTop: 12 }}>
+          <ChallengeOutcome d={d} err={err} myWords={me.roundWords}
+            stats={(
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <Stat label="Words found" value={`${me.roundWords.length} / ${g.possibleWords}`} />
+                <Stat label="Longest word" value={me.stats.longestWord ? me.stats.longestWord.toUpperCase() : '—'} />
+              </View>
+            )} />
+        </FadeUp>
+        <View style={{ alignItems: 'center', marginTop: 16 }}><XpChip gameId={g.serverId} /></View>
+        {g.missedLongest.length > 0 && (
+          <>
+            <Text style={[s.eyebrow, { marginTop: 18, marginBottom: 8 }]}>Long ones you missed</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {g.missedLongest.map((x) => (
+                <Text key={x} style={{ fontFamily: F.displayBold, fontSize: 14, color: w(0.72), borderWidth: 1, borderColor: w(0.12), paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>{x.toUpperCase()}</Text>
+              ))}
             </View>
-          )} />
-      </FadeUp>
-      <View style={{ alignItems: 'center', marginTop: 16 }}><XpChip gameId={g.serverId} /></View>
-      {g.missedLongest.length > 0 && (
-        <>
-          <Text style={[s.eyebrow, { marginTop: 18, marginBottom: 8 }]}>Long ones you missed</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {g.missedLongest.map((x) => (
-              <Text key={x} style={{ fontFamily: F.displayBold, fontSize: 14, color: w(0.72), borderWidth: 1, borderColor: w(0.12), paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>{x.toUpperCase()}</Text>
-            ))}
-          </View>
-        </>
-      )}
-    </PageScroll>
+          </>
+        )}
+      </PageScroll>
+      {/* Same celebration as winning an elimination match. */}
+      {d?.outcome === 'win' && <Confetti big />}
+    </View>
   );
 }
 
