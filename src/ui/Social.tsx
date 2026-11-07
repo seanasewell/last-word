@@ -379,7 +379,7 @@ function useChallengeAction() {
 
 function statusLabel(c: ChallengeRow): string {
   if (c.status === 'completed') {
-    const r = c.outcome === 'win' ? 'You won' : c.outcome === 'loss' ? 'You lost' : 'Draw';
+    const r = c.outcome === 'win' ? 'Win' : c.outcome === 'loss' ? 'Loss' : 'Draw';
     return c.forfeit ? `${r} · no-show` : r;
   }
   if (c.status === 'expired') return 'Expired';
