@@ -184,7 +184,7 @@ function WordInput({ final }: { final: boolean }) {
           <Floater key={f.id} text={f.text} onDone={() => setFloaters((x) => x.filter((y) => y.id !== f.id))} />
         ))}
       </Animated.View>
-      <View style={{ height: 26, alignItems: 'center', justifyContent: 'center' }} accessibilityLiveRegion="polite">
+      <View style={{ height: 22, alignItems: 'center', justifyContent: 'center' }} accessibilityLiveRegion="polite">
         {msg && (
           <Text style={{ fontFamily: F.bodyBold, fontSize: 13, color: msg.tone === 'ok' ? C.mint : msg.tone === 'mixed' ? C.amber : C.coral }} numberOfLines={1}>{msg.text}</Text>
         )}
@@ -358,7 +358,7 @@ export function GameScreen({ s: g }: { s: GameState }) {
           <WordInput key={`input-${roundKey}`} final={final} />
         )}
 
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 4, paddingBottom: insets.bottom + 24, gap: 14 }}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 0, paddingBottom: insets.bottom + 24, gap: 14 }}>
           {!single && (final ? <Versus players={active} /> : <Leaderboard players={active} started={started} />)}
           {!spectating && <WordList words={me.roundWords} />}
           {single && <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 11, color: w(0.55) }}>{g.possibleWords} words are hiding in this one.</Text>}
