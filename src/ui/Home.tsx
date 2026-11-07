@@ -457,18 +457,24 @@ function RoutePage({ route, account }: { route: Route; account: Account }) {
         </Pressable>
         <Text style={[s.h1, { fontSize: 24 }]}>{ROUTE_TITLE[route.name]}</Text>
       </View>
+      {/* A challenge page has its own scroll and pinned buttons. */}
+      {route.name === 'challenge' ? (
+        <Animated.View key={key} entering={FadeIn.duration(180)} style={{ flex: 1 }}>
+          <ChallengeScreen id={route.id} />
+        </Animated.View>
+      ) : (
       <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 40 }}
         refreshControl={route.name === 'settings' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
         <Animated.View key={key} entering={FadeIn.duration(180)}>
           {route.name === 'settings' && <SettingsScreen account={account} />}
           {route.name === 'friends' && <FriendsScreen />}
           {route.name === 'challenges' && <ChallengesScreen tab={route.tab} />}
-          {route.name === 'challenge' && <ChallengeScreen id={route.id} />}
           {route.name === 'player' && <PlayerScreen id={route.id} />}
           {route.name === 'notifications' && <NotificationsScreen />}
           {route.name === 'invite' && <InviteScreen token={route.token} />}
         </Animated.View>
       </ScrollView>
+      )}
     </Screen>
   );
 }

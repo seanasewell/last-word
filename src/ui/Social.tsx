@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   acceptChallenge, acceptFriendInvite, ago, cancelChallenge, challengeDetail, createChallenge, createFriendInvite, declineChallenge,
@@ -541,6 +542,27 @@ function ChallengeRowView({ c, now, right, pressable = false }: { c: ChallengeRo
   );
 }
 
+/** A scrolling page whose buttons sit in a panel pinned to the bottom, over the content. */
+function PinnedFooterPage({ children, footer }: { children: React.ReactNode; footer: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
+  const [footerH, setFooterH] = useState(0);
+  return (
+    <View style={{ flex: 1 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: footer ? footerH + 16 : 40 }}>
+        {children}
+      </ScrollView>
+      {footer && (
+        <View onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, gap: 10, paddingHorizontal: 12, paddingTop: 14, paddingBottom: insets.bottom + 12,
+            backgroundColor: C.ink850, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+            shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: -6 }, elevation: 16 }}>
+          {footer}
+        </View>
+      )}
+    </View>
+  );
+}
+
 /** One challenge: the invitation, the ready-to-play state, waiting, or the full results. */
 export function ChallengeScreen({ id }: { id: string }) {
   const { data: d, error, reload } = useLoad<ChallengeDetail>(() => challengeDetail(id), [id]);
@@ -548,7 +570,7 @@ export function ChallengeScreen({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const rematch = useChallengeAction();
-  if (error) return <ErrorText text={error} onRetry={reload} />;
+  if (error) return <View style={{ paddingHorizontal: 12 }}><ErrorText text={error} onRetry={reload} /></View>;
   if (!d) return <Loading />;
   const other: Person = d.other ?? { id: null, name: 'Deleted player', photo_url: null };
   const done = d.status === 'completed';
@@ -571,8 +593,19 @@ export function ChallengeScreen({ id }: { id: string }) {
     body = d.they_played ? `${other.name} has played. Their score stays hidden until you finish.` : '';
   } else { title = `Waiting for ${other.name} to play`; body = `Your score: ${d.my_score ?? 0}. They can't see it until they play.`; }
 
+  const history = done || !open;
+  const footer = history ? (
+    <>
+      {d.other?.id && (
+        <Button title={rematch.busy ? 'Sending…' : done ? 'Rematch' : 'Challenge again'} disabled={rematch.busy}
+          onPress={() => void rematch.run(() => sendChallenge({ id: d.other!.id!, name: d.other!.name }, done ? d.id : null))} />
+      )}
+      <Button title="Back to challenges" variant="ghost" onPress={() => nav.backTo({ name: 'challenges', tab: 'history' })} />
+    </>
+  ) : null;
+
   return (
-    <View>
+    <PinnedFooterPage footer={footer}>
       {done ? <ResultHeader d={d} /> : (
         <Card style={{ padding: 20, alignItems: 'center' }}>
           <View style={[row, { gap: 18 }]}>
@@ -602,7 +635,6 @@ export function ChallengeScreen({ id }: { id: string }) {
         </Card>
       )}
 
-
       {d.source && <SourceTiles source={d.source} />}
 
       {done && <WordCompare mine={d.my_words} theirs={d.their_words ?? []} otherName={other.name} />}
@@ -613,16 +645,7 @@ export function ChallengeScreen({ id }: { id: string }) {
         </>
       )}
 
-      {(done || !open) && (
-        <View style={{ gap: 10, marginTop: 24 }}>
-          {d.other?.id && (
-            <Button title={rematch.busy ? 'Sending…' : done ? 'Rematch' : 'Challenge again'} disabled={rematch.busy}
-              onPress={() => void rematch.run(() => sendChallenge({ id: d.other!.id!, name: d.other!.name }, done ? d.id : null))} />
-          )}
-          <Button title="Back to challenges" variant="ghost" onPress={() => nav.backTo({ name: 'challenges' })} />
-        </View>
-      )}
-    </View>
+    </PinnedFooterPage>
   );
 }
 
