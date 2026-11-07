@@ -241,7 +241,8 @@ export const s = StyleSheet.create({
 
 // ── Sheets & controls ──────────────────────────────────────────────────────
 /** Bottom sheet over a dimmed backdrop. */
-export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title?: string; children: React.ReactNode }) {
+/** `tall`: a fixed near-full-height sheet, so it keeps its size (e.g. while a search filters its list behind the keyboard). */
+export function Sheet({ open, onClose, title, children, tall = false }: { open: boolean; onClose: () => void; title?: string; children: React.ReactNode; tall?: boolean }) {
   // Drag the handle (or title) down to dismiss; a short drag springs back.
   const drag = useSharedValue(0);
   useEffect(() => { if (open) drag.set(0); }, [open, drag]);
@@ -264,8 +265,8 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
     <Modal visible={open} transparent animationType="none" onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable accessibilityLabel="Close" onPress={onClose} style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.55)' }]} />
-        <Animated.View entering={SlideInDown.duration(260).easing(Easing.out(Easing.cubic))} style={{ maxHeight: '85%' }}>
-          <Animated.View style={[{ backgroundColor: C.ink850, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 12, paddingBottom: 36 }, dragStyle]}>
+        <Animated.View entering={SlideInDown.duration(260).easing(Easing.out(Easing.cubic))} style={tall ? { height: '92%' } : { maxHeight: '85%' }}>
+          <Animated.View style={[{ backgroundColor: C.ink850, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 12, paddingBottom: 36 }, tall && { flex: 1 }, dragStyle]}>
             <View {...pan.panHandlers} style={{ paddingTop: 10 }}>
               <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: w(0.2), marginBottom: 16 }} />
               {title && <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white, marginBottom: 12 }}>{title}</Text>}

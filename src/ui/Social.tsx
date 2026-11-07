@@ -1,6 +1,6 @@
 // ── Friends, player profiles, 1v1 challenges, notifications, invitations ───
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, Share, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
 import {
@@ -554,9 +554,7 @@ export function ChallengeScreen({ id }: { id: string }) {
     body = 'The round unlocks for both of you once they accept.';
   } else if (d.your_turn) {
     title = 'Your round is ready';
-    body = d.they_played
-      ? `${other.name} has played. Their score stays hidden until you finish.`
-      : 'Same word for both of you. 60 seconds, one try. Leaving early ends your round.';
+    body = d.they_played ? `${other.name} has played. Their score stays hidden until you finish.` : '';
   } else { title = `Waiting for ${other.name} to play`; body = `Your score: ${d.my_score ?? 0}. They can't see it until they play.`; }
 
   return (
@@ -569,8 +567,8 @@ export function ChallengeScreen({ id }: { id: string }) {
             <PersonAvatar p={other} size={56} />
           </View>
           <Text style={{ fontFamily: F.displayBold, fontSize: 18, color: C.white, marginTop: 12, textAlign: 'center' }}>{title}</Text>
-          <Text style={[s.body, { textAlign: 'center', marginTop: 4, fontSize: 14 }]}>{body}</Text>
-          {open && <Text style={[sub, { marginTop: 8 }]}>{timeLeft(d.expires_at, now)}</Text>}
+          {body ? <Text style={[s.body, { textAlign: 'center', marginTop: 4, fontSize: 14 }]}>{body}</Text> : null}
+          {open && <Text style={{ marginTop: 8, fontFamily: F.bodySemi, fontSize: 13, color: C.amber }}>{timeLeft(d.expires_at, now)}</Text>}
 
           <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 16 }}>
             {d.needs_response && (
@@ -752,12 +750,15 @@ export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onCl
   const query = q.trim().toLowerCase();
   const shown = friends && query ? friends.filter((f) => f.name.toLowerCase().includes(query)) : friends;
   const invite = async () => { const e = await shareFriendInvite(); if (e) setErr(e); };
-  // Room for the title, note, search and the invite button; the rest is the list.
-  const { height } = useWindowDimensions();
-  const listMax = Math.max(180, height * 0.85 - 330);
+  // While the keyboard is up, pad the list so its last rows can scroll above it.
+  const [kb, setKb] = useState(0);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKb(e.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKb(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
   return (
-    <Sheet open={open} onClose={() => { setQ(''); onClose(); }} title="Challenge a friend">
-      <Text style={[s.body, { fontSize: 14, marginBottom: 12 }]}>They have 72 hours to accept before you play.</Text>
+    <Sheet open={open} onClose={() => { setQ(''); onClose(); }} title="Challenge a friend" tall>
       {friends && friends.length > 0 && (
         <TextField value={q} onChangeText={setQ} placeholder="Search friends" autoCorrect={false} autoCapitalize="none"
           returnKeyType="search" accessibilityLabel="Search friends" style={{ height: 44, borderRadius: 12, fontSize: 16 }} />
@@ -770,7 +771,7 @@ export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onCl
           <Text style={[sub, { marginTop: 14, textAlign: 'center', fontSize: 13 }]}>{`No friends match "${q.trim()}".`}</Text>
         ) : (
           // The list scrolls; the invite button below stays put.
-          <ScrollView style={{ maxHeight: listMax, marginTop: 12 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 6, paddingBottom: 4 }}>
+          <ScrollView style={{ flex: 1, marginTop: 12 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 6, paddingBottom: 4 + kb }}>
             {shown.map((f) => (
               <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }}
                 subtitle={f.wins + f.losses + f.draws ? `You ${recordText(f)}` : undefined}
@@ -780,6 +781,8 @@ export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onCl
           </ScrollView>
         )
       )}
+      {/* Fills the space when the list is short, so the button stays pinned to the bottom. */}
+      {!(shown && shown.length > 0) && <View style={{ flex: 1 }} />}
       <View style={{ marginTop: 12, marginHorizontal: -12, paddingHorizontal: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.divider, backgroundColor: C.ink850 }}>
         <Button title="Invite friends to challenge" variant="ghost" onPress={() => void invite()} />
       </View>
