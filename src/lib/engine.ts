@@ -58,8 +58,19 @@ export interface Elimination {
   remaining: number;
 }
 
+/**
+ * A 1v1 attempt. `new`: play a normal solo round, then send it as a challenge (to
+ * `opponent` straight away when one is set, e.g. a rematch). `reply`: play someone's
+ * challenge on their word; the server starts (or resumes) the attempt and its timer.
+ */
+export type ChallengeCtx =
+  | { kind: 'new'; opponent: { id: string; name: string } | null; rematchOf?: string | null }
+  | { kind: 'reply'; challengeId: string; opponentName: string };
+
 export interface GameState {
   mode: Mode | null;
+  /** Set when this solo round is part of a 1v1 challenge. */
+  challenge: ChallengeCtx | null;
   matchId: string;
   phase: Phase;
   round: number;
@@ -124,6 +135,13 @@ interface Online {
 }
 
 /** Postgres timestamps carry microseconds; trim to milliseconds before parsing. */
+function friendlyChallengeError(m: string): string {
+  if (/expired/i.test(m)) return 'This challenge has expired.';
+  if (/closed|isn't yours|not yours/i.test(m)) return 'This challenge is no longer available.';
+  if (/unavailable/i.test(m)) return 'This player is unavailable.';
+  return "Couldn't start the challenge. Check your connection and try again.";
+}
+
 const parseTs = (t: string | null) => (t ? Date.parse(t.replace(/(\.\d{3})\d+/, '$1')) : 0);
 
 const storage = {
@@ -180,7 +198,7 @@ export class GameEngine {
 
   constructor() {
     this.state = {
-      mode: null, matchId: '', phase: 'menu', round: 0, source: '', usedSources: [],
+      mode: null, challenge: null, matchId: '', phase: 'menu', round: 0, source: '', usedSources: [],
       roundStartedAt: 0, roundEndsAt: 0, accepting: false, possibleWords: 0,
       players: [], lobbyFilled: 0, prematchEndsAt: 0, nextRoundAt: 0,
       lastElimination: null, winnerId: null, spectating: false, awaitingChoice: false,
@@ -228,15 +246,15 @@ export class GameEngine {
     if (o && !o.done && o.snap?.match.status === 'lobby') void supabase.rpc('mm_leave', { p_match: o.matchId });
     this.online = null;
     this.clearTimers();
-    this.set({ phase: 'menu', mode: null, accepting: false, spectating: false, awaitingChoice: false });
+    this.set({ phase: 'menu', mode: null, challenge: null, accepting: false, spectating: false, awaitingChoice: false });
   }
 
-  startSingle() {
+  startSingle(challenge: ChallengeCtx | null = null) {
     this.online = null;
     this.clearTimers();
     const human = this.makeHuman();
     this.set({
-      mode: 'single', matchId: newId(), round: 1, usedSources: this.lastSingleSource ? [this.lastSingleSource] : [],
+      mode: 'single', challenge, matchId: newId(), round: 1, usedSources: this.lastSingleSource ? [this.lastSingleSource] : [],
       players: [human], winnerId: null, lastElimination: null, spectating: false,
       awaitingChoice: false, newBest: false, missedLongest: [], serverId: null,
       // A short 3-2-1 before the word appears, so the player can get ready.
@@ -254,14 +272,23 @@ export class GameEngine {
       if (t !== this.token) return;
       if (!sess.session) { this.connectionFailed(t); return; }
       const t0 = Date.now();
-      const { data, error } = await supabase.rpc('solo_start', { p_avoid: this.lastSingleSource || null });
+      const ch = this.state.challenge;
+      const reply = ch?.kind === 'reply' ? ch : null;
+      // A 1v1 reply starts (or resumes) the attempt on the challenger's word; its deadline never moves.
+      const { data, error } = reply
+        ? await supabase.rpc('challenge_play', { p_challenge: reply.challengeId })
+        : await supabase.rpc('solo_start', { p_avoid: this.lastSingleSource || null });
       const t1 = Date.now();
       if (t !== this.token) return;
+      if (reply && error) { this.goMenu(); this.set({ notice: friendlyChallengeError(error.message) }); return; }
       if (error || !data) { this.connectionFailed(t); return; }
-      const g = data as { id: string; source: string; possible_words: number; started_at: string; ends_at: string; server_now: string };
+      const g = data as { id: string; source: string; possible_words: number; started_at: string; ends_at: string; server_now: string;
+        finished?: boolean; words?: { word: string; points: number; at: string }[] };
       const offset = parseTs(g.server_now) - (t0 + t1) / 2;
       this.solo = { id: g.id, offset, pending: new Set() };
       this.beginRound({ source: g.source, possible: g.possible_words, startedAt: parseTs(g.started_at) - offset, endsAt: parseTs(g.ends_at) - offset, serverId: g.id });
+      // Resuming: put back the words already scored. (If time is already up, the round ends right away.)
+      if (g.words?.length) this.restoreWords(g.words.map((x) => ({ word: x.word, points: x.points, at: parseTs(x.at) - offset - this.state.roundStartedAt })));
     } catch {
       this.connectionFailed(t);
     }
@@ -274,7 +301,7 @@ export class GameEngine {
     this.matchCounted = false;
     const human = this.makeHuman();
     this.set({
-      mode: 'multi', matchId: newId(), phase: 'lobby', round: 0, source: '', usedSources: [],
+      mode: 'multi', challenge: null, matchId: newId(), phase: 'lobby', round: 0, source: '', usedSources: [],
       players: padSlots([human]), lobbyFilled: 1, winnerId: null, lastElimination: null,
       spectating: false, awaitingChoice: false, accepting: false, serverId: null,
     });
@@ -303,7 +330,7 @@ export class GameEngine {
       ...bots.slice(1).map((b, i) => ({ ...b, status: 'eliminated' as const, eliminatedInRound: i + 1, placement: 6 - i, totalScore: 150 + 220 * i + Math.floor(Math.random() * 120) })),
     ];
     this.set({
-      mode: 'multi', matchId: newId(), round: TOTAL_ROUNDS - 1, source: '', usedSources: used,
+      mode: 'multi', challenge: null, matchId: newId(), round: TOTAL_ROUNDS - 1, source: '', usedSources: used,
       players, lobbyFilled: 6, winnerId: null, lastElimination: null,
       spectating: false, awaitingChoice: false, accepting: false, serverId: null,
     });
@@ -356,6 +383,24 @@ export class GameEngine {
     this.set({ players });
     if (this.solo && playerId === HUMAN_ID) this.sendSoloWord(this.solo, result.word);
     return result;
+  }
+
+  /** Put back words the server already accepted (resuming a 1v1 attempt after the app was closed). */
+  private restoreWords(words: WordEntry[]) {
+    const me = this.state.players[0];
+    if (!me) return;
+    const used = this.used.get(me.id) ?? new Set<string>();
+    const stats = { ...me.stats };
+    let score = 0;
+    for (const x of words) {
+      used.add(x.word);
+      score += x.points;
+      stats.wordsFound++;
+      if (x.word.length > stats.longestWord.length) stats.longestWord = x.word;
+      if (!stats.bestWord || x.points > stats.bestWord.points) stats.bestWord = { word: x.word, points: x.points };
+    }
+    this.used.set(me.id, used);
+    this.set({ players: [{ ...me, roundScore: score, totalScore: score, roundWords: words.slice().reverse(), stats }] });
   }
 
   /** Send a solo word to the server; if the server turns it down, take it back. */
@@ -467,7 +512,7 @@ export class GameEngine {
         .map((c) => c.word);
       this.set({ accepting: false, phase: 'sp-results', personalBest: best, newBest, missedLongest: missed });
       const solo = this.solo;
-      if (solo) void this.finishSolo(solo);
+      if (solo) this.soloFinished = this.finishSolo(solo);
       const gameId = solo?.id ?? s.serverId ?? s.matchId;
       this.completeListeners.forEach((l) => l(gameId));
       return;
@@ -507,6 +552,9 @@ export class GameEngine {
   }
 
   /** Tell the server the solo round is over (after its last words land), then load the XP it awarded. */
+  /** Resolves once the server has scored the last solo round (results screens wait on it). */
+  soloFinished: Promise<void> = Promise.resolve();
+
   private async finishSolo(solo: NonNullable<GameEngine['solo']>) {
     await Promise.allSettled([...solo.pending]);
     try { await supabase.rpc('solo_finish', { p_game: solo.id }); } catch { /* the sweeper finishes it anyway */ }
@@ -524,7 +572,7 @@ export class GameEngine {
       if (!data || t !== this.token || this.online || this.state.phase !== 'menu') return;
       this.clearTimers();
       this.matchCounted = false;
-      this.set({ mode: 'multi', matchId: newId(), round: 0, source: '', usedSources: [], players: [], winnerId: null, lastElimination: null, spectating: false, awaitingChoice: false, accepting: false, serverId: data as string });
+      this.set({ mode: 'multi', challenge: null, matchId: newId(), round: 0, source: '', usedSources: [], players: [], winnerId: null, lastElimination: null, spectating: false, awaitingChoice: false, accepting: false, serverId: data as string });
       this.online = {
         matchId: data as string, myPid: '', offset: 0, bestRtt: Infinity, snap: null, round: 0,
         extras: new Map(), queue: [], flushScheduled: false, choice: 'none', done: false,

@@ -53,7 +53,8 @@ export function ShareCard({ d, width }: { d: ShareData; width: number }) {
   const match = d.kind === 'match';
   const scoreY = match ? 590 : 660;
   const gy = match ? 510 : 540;
-  const cardY = match ? 790 : 770;
+  const pb = !match && !!d.newBest;
+  const cardY = match ? 790 : pb ? 830 : 770;
   const cardH = 336;
   return (
     <View style={{ width, height: H * k, overflow: 'hidden', backgroundColor: C.bg }}>
@@ -74,13 +75,21 @@ export function ShareCard({ d, width }: { d: ShareData; width: number }) {
         <Line y={315} size={84} k={k} font={F.display} color={C.white} fit>{`${d.name} got the last word!`}</Line>
       ) : (
         <>
-          <Line y={330} size={34} k={k} font={F.bodyBold} color="#9CC3FF" spacing={8}>{d.newBest ? 'SOLO CHALLENGE · NEW PERSONAL BEST' : 'SOLO CHALLENGE'}</Line>
+          <Line y={330} size={34} k={k} font={F.bodyBold} color="#9CC3FF" spacing={8}>SOLO CHALLENGE</Line>
           <Line y={430} size={76} k={k} font={F.display} color={C.white}>{`${d.name}'s score`}</Line>
         </>
       )}
 
       <Line y={scoreY} size={220} k={k} font={F.display} color={C.amber} fit>{fmt(d.points)}</Line>
       {match && <Line y={scoreY + 92} size={40} k={k} font={F.bodySemi} color={w(0.8)}>match points</Line>}
+      {pb && (
+        // New personal best: a green badge right under the score.
+        <View style={{ position: 'absolute', left: 0, right: 0, top: 706 * k, alignItems: 'center' }}>
+          <View style={{ height: 76 * k, paddingHorizontal: 36 * k, borderRadius: 38 * k, backgroundColor: '#22A06B', justifyContent: 'center' }}>
+            <Text style={{ fontFamily: F.bodyBold, fontSize: 36 * k, color: C.white, includeFontPadding: false }}>New personal best 🎉</Text>
+          </View>
+        </View>
+      )}
 
       {d.bestWord && (
         <View style={{ position: 'absolute', left: 90 * k, top: cardY * k, width: (W - 180) * k, height: cardH * k, borderRadius: 40 * k, borderWidth: 3 * k, borderColor: 'rgba(61,139,255,0.5)', backgroundColor: 'rgba(61,139,255,0.14)' }} />
@@ -88,7 +97,7 @@ export function ShareCard({ d, width }: { d: ShareData; width: number }) {
       {d.bestWord && <Line y={cardY + 109} size={32} k={k} font={F.bodyBold} color={w(0.75)} spacing={8}>LONGEST WORD</Line>}
       {d.bestWord && <TileRow text={d.bestWord.word} cy={cardY + 203} maxW={W - 300} maxSize={92} k={k} gold={match} />}
 
-      <Line y={1240} size={60} k={k} font={F.display} color={C.white}>Can you beat it?</Line>
+      <Line y={pb ? 1262 : 1240} size={60} k={k} font={F.display} color={C.white}>Can you beat it?</Line>
     </View>
   );
 }

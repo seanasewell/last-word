@@ -1,24 +1,21 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, AppState, BackHandler, Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { accounts, weekRange, winsFor, type Account, type Period } from '@/lib/account';
+import { social, useSocial } from '@/lib/challenges';
 import { engine, type GameState } from '@/lib/engine';
-import { myBlocks, unblockPlayer, type BlockedPlayer } from '@/lib/moderation';
-import { PRIVACY_URL, SHOW_DEV_TOOLS, SUPPORT_URL, TERMS_URL } from '@/lib/release';
-import { fetchLeaderboard, type Leaderboard, type RankEntry, type Scope } from '@/lib/ranks';
-import { COUNTRIES, countryByCode } from '@/lib/regions';
-import { scoreWord } from '@/lib/words';
-import { cleanName, DevControls, NAME_MAX, nameError } from './Auth';
-import { Avatar, Button, Card, FadeUp, OptionSheet, ordinal, s, Screen, Sheet, TextField, TileLogo, Toggle, useNow } from './kit';
+import { fetchModeLeaderboard, type Leaderboard, type RankEntry, type RankMode, type Scope } from '@/lib/ranks';
+import { countryByCode } from '@/lib/regions';
+import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Sheet, TileLogo, useNow } from './kit';
+import { nav, useNav, type Route } from './nav';
 import { pickPhoto } from './photo';
-import { DailyChallenges, LevelCard, LevelingGuide, RewardsTab, SweepBorder } from './Progress';
+import { DailyChallenges, LevelCard, RewardsTab, StreakCard, SweepBorder } from './Progress';
 import { MatchFaces } from './MatchFaces';
-import { AdvertisementsSection } from './RemoveAds';
-import { PlayerActions, type PlayerRef } from './PlayerActions';
-import { PROVIDER_NAME, SaveProgressCard, SaveProgressNudge } from './SignIn';
-import { musicEnabled, onSoundChange, setMusicEnabled, setSoundEnabled, soundEnabled } from './sound';
+import { SettingsScreen } from './Settings';
+import { SaveProgressNudge } from './SignIn';
+import { ChallengeScreen, ChallengesScreen, FriendsScreen, InviteRecoveryBanner, InviteScreen, NotificationsScreen, PlayerScreen, RecordStats } from './Social';
 import { C, F, w } from './theme';
 
 type Tab = 'play' | 'ranks' | 'rewards' | 'profile';
@@ -75,13 +72,35 @@ function FullWidthLogo() {
 const MATCH_CARD_BLUE = '#11274D';
 const MATCH_FACTS = [['👨', '6 players'], ['🕐', '5 rounds · 60 seconds each']] as const;
 
+/** Notification bell with an unread dot (Play tab, top right). */
+function Bell() {
+  const c = useSocial();
+  const unread = c?.unread ?? 0;
+  return (
+    <Pressable onPress={() => nav.push({ name: 'notifications' })} hitSlop={10} accessibilityRole="button"
+      accessibilityLabel={unread ? `Notifications, ${unread} unread` : 'Notifications'}
+      style={({ pressed }) => ({ position: 'absolute', top: -6, right: 0, width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? w(0.08) : 'transparent', zIndex: 2 })}>
+      <Text style={{ fontSize: 21 }}>🔔</Text>
+      {unread > 0 && (
+        <View style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, paddingHorizontal: 4, borderRadius: 8, backgroundColor: C.coral, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.bg }}>
+          <Text style={{ fontFamily: F.bodyBold, fontSize: 9, color: C.white }}>{unread > 9 ? '9+' : unread}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 function PlayTab({ best, account }: { best: number; account: Account }) {
+  const c = useSocial();
+  const yourTurn = c?.your_turn ?? 0;
   return (
     <View>
+      <Bell />
       <View style={{ paddingTop: 36 }}><FullWidthLogo /></View>
 
       <FadeUp delay={60} style={{ marginTop: 24 }}><LevelCard /></FadeUp>
       <SaveProgressNudge account={account} />
+      <InviteRecoveryBanner />
 
       <FadeUp delay={120} style={{ marginTop: 12, gap: 12 }}>
         <Pressable onPress={() => engine.startMatch()} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
@@ -118,27 +137,24 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
             <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>60 second rounds. Try and beat your personal best.</Text>
           </Card>
         </Pressable>
+
+        <Pressable onPress={() => nav.push({ name: 'challenges' })} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+          <Card style={{ borderRadius: 24, padding: 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white }}>1v1 challenge</Text>
+              <Text style={{ fontSize: 18 }}>⚔️</Text>
+              {yourTurn > 0 && (
+                <View style={{ marginLeft: 'auto', borderRadius: 999, backgroundColor: 'rgba(255,181,71,0.15)', borderWidth: 1, borderColor: 'rgba(255,181,71,0.4)', paddingHorizontal: 10, paddingVertical: 3 }}>
+                  <Text style={{ fontFamily: F.bodyBold, fontSize: 12, color: C.amber }}>{yourTurn} your turn</Text>
+                </View>
+              )}
+            </View>
+            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>Challenge friends to beat your score.</Text>
+          </Card>
+        </Pressable>
       </FadeUp>
 
       <FadeUp delay={180} style={{ marginTop: 28 }}><DailyChallenges /></FadeUp>
-    </View>
-  );
-}
-
-/** Points for each word length, shown from Profile → How scoring works. */
-function ScoringGuide() {
-  return (
-    <View>
-      <Text style={[s.body, { fontSize: 14 }]}>Longer words score more points.</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
-        {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((n) => (
-          <View key={n} style={{ width: '18.4%', alignItems: 'center', paddingVertical: 6, borderRadius: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
-            <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.65) }}>{n}{n === 11 ? '+' : ''} letters</Text>
-            <Text style={{ fontFamily: F.displayBold, fontSize: 15, color: C.white }}>{scoreWord('x'.repeat(n))}</Text>
-          </View>
-        ))}
-      </View>
-      <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65), marginTop: 12, lineHeight: 17 }}>{"Each letter can be used as often as it appears in the source. The source word itself doesn't count. No proper nouns, abbreviations or hyphenated words."}</Text>
     </View>
   );
 }
@@ -197,11 +213,22 @@ function Segmented<T extends string>({ options, value, onChange, small = false }
   );
 }
 
-function RankRow({ e, scope, onPress }: { e: RankEntry; scope: Scope; onPress?: () => void }) {
+const MODES: { id: RankMode; label: string }[] = [
+  { id: 'elimination', label: 'Elimination' },
+  { id: 'solo', label: 'Solo' },
+  { id: '1v1', label: '1v1' },
+];
+const MODE_TEXT: Record<RankMode, { sub: string; empty: string; emptyBody: (phrase: string) => string; unit: (n: number) => string }> = {
+  elimination: { sub: 'Most elimination-match wins', empty: 'No winners yet', emptyBody: (p) => `Win an elimination match ${p === 'all time' ? '' : p} to be first on this board.`, unit: (n) => (n === 1 ? 'win' : 'wins') },
+  solo: { sub: 'Best single solo score', empty: 'No scores yet', emptyBody: (p) => `Play a solo challenge ${p === 'all time' ? '' : p} to be first on this board.`, unit: () => 'best' },
+  '1v1': { sub: 'Most 1v1 wins', empty: 'No 1v1 results yet', emptyBody: (p) => `Win a 1v1 challenge ${p === 'all time' ? '' : p} to be first on this board.`, unit: (n) => (n === 1 ? 'win' : 'wins') },
+};
+
+function RankRow({ e, scope, mode, onPress }: { e: RankEntry; scope: Scope; mode: RankMode; onPress?: () => void }) {
   const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : null;
   const where = scope === 'world' ? `${e.country.flag} ${e.country.name}` : scope === 'national' ? e.region : `${e.country.flag} ${e.region}`;
   return (
-    <Pressable onPress={onPress} disabled={!onPress} accessibilityHint={onPress ? 'Report or block this player' : undefined}
+    <Pressable onPress={onPress} disabled={!onPress} accessibilityHint={onPress ? 'Open this player’s profile' : undefined}
       style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16,
       backgroundColor: pressed ? 'rgba(61,139,255,0.12)' : e.isYou ? 'rgba(61,139,255,0.15)' : e.rank <= 3 ? 'rgba(255,181,71,0.06)' : w(0.03), borderWidth: e.isYou ? 1 : 0, borderColor: 'rgba(61,139,255,0.4)' })}>
       <View style={{ width: 30, alignItems: 'center' }}>
@@ -212,35 +239,45 @@ function RankRow({ e, scope, onPress }: { e: RankEntry; scope: Scope; onPress?: 
         <Text numberOfLines={1} style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>{e.name}</Text>
         <Text numberOfLines={1} style={{ fontFamily: F.body, fontSize: 11, color: w(0.65) }}>{where}</Text>
       </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text style={[{ fontFamily: F.display, fontSize: 18, color: C.white }, s.tabular]}>{e.wins}</Text>
-        <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.6) }}>{e.wins === 1 ? 'win' : 'wins'}</Text>
-      </View>
+      {mode === '1v1' ? (
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[{ fontFamily: F.display, fontSize: 16, color: C.white }, s.tabular]}>
+            {e.wins}<Text style={{ color: w(0.45) }}> / </Text>{e.losses ?? 0}<Text style={{ color: w(0.45) }}> / </Text>{e.draws ?? 0}
+          </Text>
+          <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.6) }}>W / L / D</Text>
+        </View>
+      ) : (
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[{ fontFamily: F.display, fontSize: 18, color: mode === 'solo' ? C.amber : C.white }, s.tabular]}>{e.wins}</Text>
+          <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.6) }}>{MODE_TEXT[mode].unit(e.wins)}</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
 
+let rememberedMode: RankMode = 'elimination';
+
 function RanksTab({ account, refreshKey }: { account: Account; refreshKey: number }) {
+  const [mode, setModeState] = useState<RankMode>(rememberedMode);
+  const setMode = (m: RankMode) => { rememberedMode = m; setModeState(m); };
   const [scope, setScope] = useState<Scope>('world');
   const [period, setPeriod] = useState<Period>('week');
   const [board, setBoard] = useState<{ key: string; data: Leaderboard } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const country = countryByCode(account.country);
   const now = useNow(true, 30_000);
-  const key = `${scope}-${period}`;
-  const [acting, setActing] = useState<PlayerRef | null>(null);
-  const [blocks, setBlocks] = useState(0);
-  const actOn = (e: RankEntry) => (e.isYou ? undefined : () => setActing({ name: e.name, glyph: e.glyph, hue: e.hue, photo: e.photo, target: { userId: e.id } }));
+  const key = `${mode}-${scope}-${period}`;
 
-  // Load the board for the current scope and period (and on pull-to-refresh).
+  // Load the board for the current mode, scope and period (and on pull-to-refresh).
   const myWinsLocal = winsFor(account, period);
   useEffect(() => {
     let live = true;
-    fetchLeaderboard(scope, period)
-      .then((data) => { if (live) { setBoard({ key: `${scope}-${period}`, data }); setError(null); } })
+    fetchModeLeaderboard(mode, scope, period)
+      .then((data) => { if (live) { setBoard({ key: `${mode}-${scope}-${period}`, data }); setError(null); } })
       .catch(() => { if (live) setError("Couldn't load rankings. Pull down to try again."); });
     return () => { live = false; };
-  }, [scope, period, refreshKey, myWinsLocal, blocks]);
+  }, [mode, scope, period, refreshKey, myWinsLocal]);
 
   const scopes: { id: Scope; label: string }[] = [
     { id: 'world', label: '🌍 World' },
@@ -252,14 +289,16 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
   const reset = resetText(period, now);
   const data = board?.key === key ? board.data : null;
   const you = data?.you ?? null;
-  const myWins = you?.wins ?? myWinsLocal;
+  const t = MODE_TEXT[mode];
+  const myValue = you ? (mode === '1v1' ? `${you.wins}-${you.losses ?? 0}-${you.draws ?? 0}` : String(you.wins)) : mode === 'elimination' ? String(myWinsLocal) : '—';
 
   return (
     <View>
       <Text style={s.h1}>Ranks</Text>
-      <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.72), marginTop: 4 }}>Most elimination-match wins · {periodRange(period, new Date(now))}</Text>
+      <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.72), marginTop: 4 }}>{t.sub} · {periodRange(period, new Date(now))}</Text>
       <View style={{ gap: 8, marginTop: 16 }}>
-        <Segmented options={scopes} value={scope} onChange={setScope} />
+        <Segmented options={MODES} value={mode} onChange={setMode} />
+        <Segmented options={scopes} value={scope} onChange={setScope} small />
         <Segmented options={PERIODS} value={period} onChange={setPeriod} small />
       </View>
       <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, padding: 16 }}>
@@ -268,7 +307,10 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
           <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.72) }}>Your rank {scopeName}</Text>
           <Text style={{ fontFamily: F.display, fontSize: 24, color: C.white }}>{you ? ordinal(you.rank) : data ? 'Not ranked yet' : '…'}</Text>
         </View>
-        <Text accessibilityLabel={`${myWins} ${myWins === 1 ? 'win' : 'wins'} ${p.phrase}`} style={[{ fontFamily: F.display, fontSize: 34, color: C.mint }, s.tabular]}>{myWins}</Text>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[{ fontFamily: F.display, fontSize: mode === '1v1' ? 24 : 34, color: mode === 'solo' ? C.amber : C.mint }, s.tabular]}>{myValue}</Text>
+          {mode === '1v1' && <Text style={{ fontFamily: F.body, fontSize: 10, color: w(0.6) }}>W / L / D</Text>}
+        </View>
       </View>
       {reset && <Text style={{ alignSelf: 'flex-end', marginTop: 8, fontFamily: F.body, fontSize: 11, color: w(0.6) }}>{reset}</Text>}
 
@@ -276,18 +318,18 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
       {!error && !data && <ActivityIndicator color={C.primary} style={{ marginTop: 32 }} />}
       {data && data.entries.length === 0 && (
         <Card style={{ marginTop: 12, padding: 20, alignItems: 'center' }}>
-          <Text style={{ fontSize: 32 }}>🏆</Text>
-          <Text style={{ fontFamily: F.displayBold, fontSize: 18, color: C.white, marginTop: 8 }}>No winners yet</Text>
-          <Text style={[s.body, { textAlign: 'center', marginTop: 4 }]}>Win an elimination match {p.phrase === 'all time' ? '' : p.phrase} to be first on this board.</Text>
+          <Text style={{ fontSize: 32 }}>{mode === '1v1' ? '⚔️' : mode === 'solo' ? '⏱️' : '🏆'}</Text>
+          <Text style={{ fontFamily: F.displayBold, fontSize: 18, color: C.white, marginTop: 8 }}>{t.empty}</Text>
+          <Text style={[s.body, { textAlign: 'center', marginTop: 4 }]}>{t.emptyBody(p.phrase)}</Text>
         </Card>
       )}
       {data && data.entries.length > 0 && (
         <View style={{ gap: 6, marginTop: 8 }}>
-          {data.entries.map((e) => <RankRow key={e.id} e={e} scope={scope} onPress={actOn(e)} />)}
+          {data.entries.map((e) => <RankRow key={e.id} e={e} scope={scope} mode={mode} onPress={e.isYou ? undefined : () => nav.push({ name: 'player', id: e.id })} />)}
           {you && you.rank > 50 && (
             <>
               <Text style={{ textAlign: 'center', color: w(0.5), paddingVertical: 2 }}>⋯</Text>
-              <RankRow e={you} scope={scope} />
+              <RankRow e={you} scope={scope} mode={mode} />
             </>
           )}
           <Text style={{ textAlign: 'center', marginTop: 12, fontFamily: F.body, fontSize: 11, color: w(0.55) }}>
@@ -295,30 +337,39 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
           </Text>
         </View>
       )}
-      <PlayerActions player={acting} onClose={() => setActing(null)} onBlocked={() => setBlocks((n) => n + 1)} />
     </View>
   );
 }
 
 // ── Profile ────────────────────────────────────────────────────────────────
-function ProfileTab({ account, best }: { account: Account; best: number }) {
-  const [name, setName] = useState(account.name);
-  const [saved, setSaved] = useState(false);
-  const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'delete' | 'signout' | 'dev' | 'blocked' | 'scoring' | 'leveling'>(null);
-  const [photoErr, setPhotoErr] = useState<string | null>(null);
-  const [sound, setSound] = useState(soundEnabled);
-  const [musicOn, setMusicOn] = useState(musicEnabled);
-  useEffect(() => onSoundChange(() => { setSound(soundEnabled()); setMusicOn(musicEnabled()); }), []);
-  const country = countryByCode(account.country);
-  const err = nameError(name);
-  const dirty = name.trim() !== account.name;
+function SocialRow({ emoji, label, detail, badge, onPress, last = false }: { emoji: string; label: string; detail: string; badge?: number; onPress: () => void; last?: boolean }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button"
+      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: last ? 0 : 1, borderBottomColor: C.divider, backgroundColor: pressed ? w(0.04) : 'transparent' })}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Text style={{ fontSize: 18 }}>{emoji}</Text>
+        <View>
+          <Text style={{ fontFamily: F.bodySemi, fontSize: 15, color: C.white }}>{label}</Text>
+          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65) }}>{detail}</Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        {!!badge && (
+          <View style={{ minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, backgroundColor: C.coral, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontFamily: F.bodyBold, fontSize: 12, color: C.white }}>{badge}</Text>
+          </View>
+        )}
+        <Text style={{ color: w(0.55), fontSize: 18 }}>›</Text>
+      </View>
+    </Pressable>
+  );
+}
 
-  const save = () => {
-    if (err || !dirty) return;
-    accounts.update({ name: name.trim() });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1600);
-  };
+function ProfileTab({ account, best }: { account: Account; best: number }) {
+  const [sheet, setSheet] = useState<null | 'photo'>(null);
+  const [photoErr, setPhotoErr] = useState<string | null>(null);
+  const c = useSocial();
+  const country = countryByCode(account.country);
   const choose = async (source: 'library' | 'camera') => {
     setSheet(null);
     const r = await pickPhoto(source);
@@ -328,142 +379,61 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
     const err = await accounts.update({ photo: r.uri });
     if (err) setPhotoErr(err);
   };
-  const [deleteErr, setDeleteErr] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const remove = async () => {
-    setDeleting(true);
-    const err = await accounts.deleteAccount();
-    setDeleting(false);
-    if (err) setDeleteErr(err);
-    else setSheet(null);
-  };
-  const wins = (p: Period) => winsFor(account, p);
-  const row = { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.divider };
+  const eliminationWins = Math.max(c?.elimination_wins ?? 0, account.totalWins);
+  const soloBest = Math.max(c?.solo_best ?? 0, best);
+  const record = c?.record ?? { wins: 0, losses: 0, draws: 0 };
+  const friends = c?.friends ?? 0;
+  const active = c?.active ?? 0;
 
   return (
     <View>
-      <Text style={s.h1}>Profile</Text>
-      <View style={{ alignItems: 'center', marginTop: 18 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={s.h1}>Profile</Text>
+        <Pressable onPress={() => nav.push({ name: 'settings' })} hitSlop={10} accessibilityRole="button" accessibilityLabel="Settings"
+          style={({ pressed }) => ({ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? w(0.08) : 'transparent' })}>
+          <Text style={{ fontSize: 22 }}>⚙️</Text>
+        </Pressable>
+      </View>
+      <View style={{ alignItems: 'center', marginTop: 10 }}>
         <Pressable onPress={() => setSheet('photo')} accessibilityLabel="Change photo">
           <Avatar player={meAvatar(account)} size={104} ring />
         </Pressable>
-        <Pressable onPress={() => setSheet('photo')} hitSlop={8} style={{ marginTop: 10 }}>
+        <Text style={{ fontFamily: F.displayBold, fontSize: 22, color: C.white, marginTop: 12 }}>{account.name}</Text>
+        <Text style={{ fontFamily: F.body, fontSize: 13, color: w(0.65), marginTop: 2 }}>{country.flag} {account.region}</Text>
+        <Pressable onPress={() => setSheet('photo')} hitSlop={8} style={{ marginTop: 8 }}>
           <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.primary }}>{account.photo ? 'Change photo' : 'Add photo'}</Text>
         </Pressable>
         {photoErr && <Text style={{ marginTop: 6, fontFamily: F.body, fontSize: 13, color: C.coral }}>{photoErr}</Text>}
       </View>
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 20 }}>
-        {([['Wins this week', wins('week'), C.mint], ['Total wins', account.totalWins, C.white], ['Matches played', account.matchesPlayed, C.white], ['Solo best', best, C.amber]] as const).map(([l, v, col]) => (
-          <Card key={l} style={{ width: '48.5%', paddingHorizontal: 16, paddingVertical: 12 }}>
-            <Text style={s.eyebrow}>{l}</Text>
-            <Text style={[{ fontFamily: F.display, fontSize: 20, color: col }, s.tabular]}>{v}</Text>
-          </Card>
-        ))}
+      <View style={{ marginTop: 20, gap: 12 }}>
+        <LevelCard large />
+        <StreakCard />
       </View>
 
-      {!account.provider && <View style={{ marginTop: 20 }}><SaveProgressCard /></View>}
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+        <Card style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}>
+          <Text style={s.eyebrow}>Elimination wins</Text>
+          <Text style={[{ fontFamily: F.display, fontSize: 24, color: C.white }, s.tabular]}>{eliminationWins}</Text>
+        </Card>
+        <Card style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}>
+          <Text style={s.eyebrow}>Solo best</Text>
+          <Text style={[{ fontFamily: F.display, fontSize: 24, color: C.amber }, s.tabular]}>{soloBest}</Text>
+        </Card>
+      </View>
+      <Pressable onPress={() => nav.push({ name: 'challenges', tab: 'history' })}>
+        <Card style={{ marginTop: 8, paddingVertical: 14 }}>
+          <Text style={[s.eyebrow, { textAlign: 'center', marginBottom: 8 }]}>1v1 record</Text>
+          <RecordStats r={record} />
+        </Card>
+      </Pressable>
 
-      <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Account</Text>
+      <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Social</Text>
       <View style={{ borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' }}>
-        {account.provider && (
-          <View style={row}>
-            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>Signed in with</Text>
-            <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{PROVIDER_NAME[account.provider]}</Text>
-          </View>
-        )}
-        <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.divider }}>
-          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.7) }}>Display name</Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-            <TextField value={name} onChangeText={(t) => setName(cleanName(t))} maxLength={NAME_MAX} autoCorrect={false}
-              returnKeyType="done" onSubmitEditing={save} accessibilityLabel="Display name" style={{ flex: 1, height: 44, borderRadius: 12, fontSize: 16 }} />
-            <Pressable onPress={save} disabled={!dirty || !!err} style={{ height: 44, paddingHorizontal: 16, borderRadius: 12, justifyContent: 'center', backgroundColor: dirty && !err ? C.primary : C.primaryDisabled }}>
-              <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: (dirty && !err) || saved ? C.white : w(0.5) }}>{saved ? 'Saved ✓' : 'Save'}</Text>
-            </Pressable>
-          </View>
-          {dirty && err && <Text style={{ marginTop: 4, fontFamily: F.body, fontSize: 12, color: C.coral }}>{err}</Text>}
-        </View>
-        <Pressable onPress={() => setSheet('country')} style={row}>
-          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>Country</Text>
-          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{country.flag} {country.name}  ›</Text>
-        </Pressable>
-        <Pressable onPress={() => setSheet('region')} style={[row, { borderBottomWidth: 0 }]}>
-          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>{country.regionLabel}</Text>
-          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{account.region}  ›</Text>
-        </Pressable>
+        <SocialRow emoji="👥" label="Friends" detail={`${friends} ${friends === 1 ? 'friend' : 'friends'}`} badge={c?.requests} onPress={() => nav.push({ name: 'friends' })} />
+        <SocialRow emoji="⚔️" label="1v1 challenges" detail={`${active} active`} badge={c?.your_turn} onPress={() => nav.push({ name: 'challenges' })} last />
       </View>
 
-      <AdvertisementsSection />
-
-      <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Settings</Text>
-      <View style={{ borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' }}>
-        <View style={[row, { paddingVertical: 10 }]}>
-          <MenuLabel emoji="🔊" text="Sound effects" />
-          <Toggle on={sound} onChange={setSoundEnabled} label="Sound effects" />
-        </View>
-        <View style={[row, { paddingVertical: 10 }]}>
-          <MenuLabel emoji="🎵" text="Music" />
-          <Toggle on={musicOn} onChange={setMusicEnabled} label="Music" />
-        </View>
-        <Pressable onPress={() => setSheet('blocked')} style={[row, { borderBottomWidth: 0 }]}>
-          <MenuLabel emoji="🚫" text="Blocked players" />
-          <Text style={{ color: w(0.55) }}>›</Text>
-        </Pressable>
-      </View>
-
-      <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Help</Text>
-      <View style={{ borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' }}>
-        <Pressable onPress={() => setSheet('scoring')} style={row}>
-          <MenuLabel emoji="🤔" text="How scoring works" />
-          <Text style={{ color: w(0.55) }}>›</Text>
-        </Pressable>
-        <Pressable onPress={() => setSheet('leveling')} style={row}>
-          <MenuLabel emoji="⭐" text="How leveling works" />
-          <Text style={{ color: w(0.55) }}>›</Text>
-        </Pressable>
-        <Pressable onPress={() => { void Linking.openURL(SUPPORT_URL); }} style={row}>
-          <MenuLabel emoji="💬" text="Help and support" />
-          <Text style={{ color: w(0.55) }}>↗</Text>
-        </Pressable>
-        <Pressable onPress={() => { void Linking.openURL(PRIVACY_URL); }} style={row}>
-          <MenuLabel emoji="🔒" text="Privacy policy" />
-          <Text style={{ color: w(0.55) }}>↗</Text>
-        </Pressable>
-        <Pressable onPress={() => { void Linking.openURL(TERMS_URL); }} style={[row, { borderBottomWidth: 0 }]}>
-          <MenuLabel emoji="📄" text="Terms of use" />
-          <Text style={{ color: w(0.55) }}>↗</Text>
-        </Pressable>
-      </View>
-
-      {SHOW_DEV_TOOLS && (
-        <>
-          <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Developer</Text>
-          <Pressable onPress={() => setSheet('dev')} style={{ flexDirection: 'row', justifyContent: 'space-between', borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 16, paddingVertical: 14 }}>
-            <MenuLabel emoji="🛠" text="Developer controls" />
-            <Text style={{ color: w(0.55) }}>›</Text>
-          </Pressable>
-        </>
-      )}
-
-      <View style={{ gap: 10, marginTop: 26 }}>
-        {account.provider && (
-          <Pressable onPress={() => setSheet('signout')} style={{ height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
-            <Text style={{ fontFamily: F.bodyBold, fontSize: 16, color: C.white }}>Sign out</Text>
-          </Pressable>
-        )}
-        <Pressable onPress={() => setSheet('delete')} style={{ height: 48, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ fontFamily: F.bodyBold, fontSize: 16, color: C.coral }}>Delete account</Text>
-        </Pressable>
-      </View>
-
-      <Sheet open={sheet === 'scoring'} onClose={() => setSheet(null)} title="How scoring works">
-        <ScoringGuide />
-        <Button title="Close" variant="ghost" style={{ marginTop: 20 }} onPress={() => setSheet(null)} />
-      </Sheet>
-      <Sheet open={sheet === 'leveling'} onClose={() => setSheet(null)} title="How leveling works">
-        <LevelingGuide />
-        <Button title="Close" variant="ghost" style={{ marginTop: 12 }} onPress={() => setSheet(null)} />
-      </Sheet>
       <Sheet open={sheet === 'photo'} onClose={() => setSheet(null)} title="Profile photo">
         <View style={{ gap: 10 }}>
           <Button title="Choose from library" onPress={() => choose('library')} />
@@ -471,69 +441,7 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
           {account.photo && <Pressable onPress={() => { void accounts.update({ photo: null }); setSheet(null); }} style={{ alignItems: 'center', paddingVertical: 10 }}><Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.coral }}>Remove photo</Text></Pressable>}
         </View>
       </Sheet>
-      <OptionSheet open={sheet === 'country'} onClose={() => setSheet(null)} title="Country" value={account.country}
-        options={COUNTRIES.map((x) => ({ value: x.code, label: `${x.flag}  ${x.name}` }))}
-        onPick={(v) => { const c = countryByCode(v); accounts.update({ country: c.code, region: c.regions[0] }); }} />
-      <OptionSheet open={sheet === 'region'} onClose={() => setSheet(null)} title={country.regionLabel} value={account.region}
-        options={country.regions.map((r) => ({ value: r, label: r }))} onPick={(v) => accounts.update({ region: v })} />
-      <Sheet open={sheet === 'signout'} onClose={() => setSheet(null)} title="Sign out?">
-        <Text style={s.body}>{`Your progress is saved. Sign in with ${account.provider ? PROVIDER_NAME[account.provider] : ''} to pick up where you left off.`}</Text>
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-          <Button title="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => setSheet(null)} />
-          <Button title="Sign out" style={{ flex: 1 }} onPress={() => { setSheet(null); void accounts.signOut(); }} />
-        </View>
-      </Sheet>
-      <Sheet open={sheet === 'delete'} onClose={() => setSheet(null)} title="Delete your account?">
-        <Text style={s.body}>{"This permanently removes your profile, photo, wins, level and achievements. This can't be undone."}</Text>
-        {deleteErr && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral }}>{deleteErr}</Text>}
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-          <Button title="Cancel" variant="ghost" style={{ flex: 1 }} onPress={() => { setDeleteErr(null); setSheet(null); }} />
-          <Button title={deleting ? 'Deleting…' : 'Delete account'} variant="danger" disabled={deleting} style={{ flex: 1 }} onPress={remove} />
-        </View>
-      </Sheet>
-      {SHOW_DEV_TOOLS && <DevControls open={sheet === 'dev'} onClose={() => setSheet(null)} signedIn />}
-      <BlockedPlayers open={sheet === 'blocked'} onClose={() => setSheet(null)} />
     </View>
-  );
-}
-
-/** A menu row's emoji and label, 8px apart. */
-const MenuLabel = ({ emoji, text }: { emoji: string; text: string }) => (
-  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-    <Text style={{ fontSize: 14 }}>{emoji}</Text>
-    <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{text}</Text>
-  </View>
-);
-
-// ── Blocked players ────────────────────────────────────────────────────────
-function BlockedPlayers({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [list, setList] = useState<BlockedPlayer[] | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    let live = true;
-    myBlocks().then((l) => { if (live) { setList(l); setErr(null); } }).catch(() => { if (live) setErr("Couldn't load your blocked players."); });
-    return () => { live = false; };
-  }, [open]);
-  const unblock = async (id: string) => {
-    const e = await unblockPlayer(id);
-    if (e) setErr(e); else setList((l) => (l ?? []).filter((x) => x.userId !== id));
-  };
-  return (
-    <Sheet open={open} onClose={onClose} title="Blocked players">
-      {err && <Text style={{ fontFamily: F.body, fontSize: 13, color: C.coral, marginBottom: 8 }}>{err}</Text>}
-      {!list && !err && <ActivityIndicator color={C.primary} style={{ marginVertical: 16 }} />}
-      {list && list.length === 0 && <Text style={s.body}>{"You haven't blocked anyone. To block a player, tap them on the ranks or in a match's results."}</Text>}
-      <ScrollView style={{ maxHeight: 380 }}>
-        {(list ?? []).map((b) => (
-          <View key={b.userId} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
-            <Avatar player={{ glyph: b.name[0]?.toUpperCase() ?? '?', hue: 210, photo: b.photo }} size={36} />
-            <Text numberOfLines={1} style={{ flex: 1, fontFamily: F.bodyBold, fontSize: 15, color: C.white }}>{b.name}</Text>
-            <Pressable onPress={() => void unblock(b.userId)} hitSlop={8}><Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.primary }}>Unblock</Text></Pressable>
-          </View>
-        ))}
-      </ScrollView>
-    </Sheet>
   );
 }
 
@@ -553,31 +461,92 @@ function NoticeToast({ text }: { text: string }) {
   );
 }
 
+// ── Pages over the tabs (Settings, Friends, Challenges…) ───────────────────
+const ROUTE_TITLE: Record<Route['name'], string> = {
+  settings: 'Settings', friends: 'Friends', challenges: '1v1 challenges', challenge: '1v1 challenge',
+  player: 'Player', notifications: 'Notifications', invite: 'Invite',
+};
+
+function RoutePage({ route, account }: { route: Route; account: Account }) {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await social.refresh();
+    setRefreshKey((k) => k + 1);
+    setRefreshing(false);
+  }, []);
+  const key = `${JSON.stringify(route)}-${refreshKey}`;
+  return (
+    <Screen style={{ paddingBottom: 0 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingTop: 8, paddingBottom: 4 }}>
+        <Pressable onPress={() => nav.pop()} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8}
+          style={({ pressed }) => ({ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? w(0.08) : 'transparent' })}>
+          <Text style={{ fontSize: 30, color: C.white, marginTop: -4 }}>‹</Text>
+        </Pressable>
+        <Text style={[s.h1, { fontSize: 24 }]}>{ROUTE_TITLE[route.name]}</Text>
+      </View>
+      <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 40 }}
+        refreshControl={route.name === 'settings' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
+        <Animated.View key={key} entering={FadeIn.duration(180)}>
+          {route.name === 'settings' && <SettingsScreen account={account} />}
+          {route.name === 'friends' && <FriendsScreen />}
+          {route.name === 'challenges' && <ChallengesScreen tab={route.tab} />}
+          {route.name === 'challenge' && <ChallengeScreen id={route.id} />}
+          {route.name === 'player' && <PlayerScreen id={route.id} />}
+          {route.name === 'notifications' && <NotificationsScreen />}
+          {route.name === 'invite' && <InviteScreen token={route.token} />}
+        </Animated.View>
+      </ScrollView>
+    </Screen>
+  );
+}
+
 export function Home({ s: g, account }: { s: GameState; account: Account }) {
   // Keep the tab when returning from a game; start on Play after each sign-in.
   const [tab, setTabState] = useState<Tab>(() => (rememberedFor === account.id ? rememberedTab : 'play'));
   const setTab = (t: Tab) => { rememberedTab = t; rememberedFor = account.id; setTabState(t); };
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const stack = useNav();
+  const top = stack[stack.length - 1];
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await accounts.refresh().catch(() => {});
+    await Promise.all([accounts.refresh().catch(() => {}), social.refresh()]);
     setRefreshKey((k) => k + 1);
     setRefreshing(false);
   }, []);
+  // Badge counts: on open, on each tab change, and when the app comes back.
+  useEffect(() => { void social.refresh(); }, [tab, top?.name]);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') void social.refresh(); });
+    return () => sub.remove();
+  }, []);
+  // Android back button closes the top page.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => { if (nav.get().length) { nav.pop(); return true; } return false; });
+    return () => sub.remove();
+  }, []);
   return (
-    <Screen padBottom={false}>
-      <ScrollView key={tab} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 16, paddingBottom: 32 }}
-        refreshControl={tab === 'play' || tab === 'rewards' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
-        <Animated.View entering={FadeIn.duration(200)}>
-          {tab === 'play' && <PlayTab best={g.personalBest} account={account} />}
-          {tab === 'ranks' && <RanksTab account={account} refreshKey={refreshKey} />}
-          {tab === 'rewards' && <RewardsTab />}
-          {tab === 'profile' && <ProfileTab account={account} best={g.personalBest} />}
+    <View style={{ flex: 1 }}>
+      <Screen padBottom={false}>
+        <ScrollView key={tab} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 16, paddingBottom: 32 }}
+          refreshControl={tab === 'play' || tab === 'rewards' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
+          <Animated.View entering={FadeIn.duration(200)}>
+            {tab === 'play' && <PlayTab best={g.personalBest} account={account} />}
+            {tab === 'ranks' && <RanksTab account={account} refreshKey={refreshKey} />}
+            {tab === 'rewards' && <RewardsTab />}
+            {tab === 'profile' && <ProfileTab account={account} best={g.personalBest} />}
+          </Animated.View>
+        </ScrollView>
+        {g.notice && <NoticeToast text={g.notice} />}
+        <TabBar tab={tab} onChange={setTab} account={account} />
+      </Screen>
+      {top && (
+        <Animated.View key={stack.length} entering={FadeIn.duration(160)} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}>
+          <RoutePage route={top} account={account} />
         </Animated.View>
-      </ScrollView>
-      {g.notice && <NoticeToast text={g.notice} />}
-      <TabBar tab={tab} onChange={setTab} account={account} />
-    </Screen>
+      )}
+    </View>
   );
 }

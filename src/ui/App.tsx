@@ -4,6 +4,8 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { accounts } from '@/lib/account';
 import { ads } from '@/lib/ads';
+import { social } from '@/lib/challenges';
+import { onPushOpened, registerForPush } from '@/lib/push';
 import { purchases } from '@/lib/purchases';
 import { engine, HUMAN_ID } from '@/lib/engine';
 import { progress } from '@/lib/progress';
@@ -11,6 +13,8 @@ import { AuthFlow, Onboarding } from './Auth';
 import { GameScreen } from './GameScreen';
 import { Home } from './Home';
 import { useAuth, useGame } from './kit';
+import { nav, useNav } from './nav';
+import { openNotification } from './Social';
 import { playResultMusic, startGameMusic, stopGameMusic } from './sound';
 import { CelebrationHost } from './Progress';
 import { SimulatedAdHost } from './RemoveAds';
@@ -41,6 +45,27 @@ export function LastWordApp() {
     if (id) { progress.use(id); engine.setProfile(id, name || 'You', photo); }
     else engine.goMenu();
   }, [id, name, photo]);
+
+  // Friends and challenges: fresh counts for this player; register for pushes once onboarded.
+  useEffect(() => {
+    social.reset();
+    nav.reset();
+    if (id) void social.refresh();
+  }, [id]);
+  const onboarded = !!id && !auth.onboarding;
+  useEffect(() => { if (onboarded && id) void registerForPush(id); }, [onboarded, id]);
+  // Invite links (opened from Messages, WhatsApp…) wait until the player is signed in and on the menu.
+  useNav();
+  const inviteWaiting = nav.hasInvite();
+  useEffect(() => {
+    if (!onboarded || g.phase !== 'menu' || !nav.hasInvite()) return;
+    const t = nav.takeInvite();
+    if (t) nav.push({ name: 'invite', token: t });
+  }, [onboarded, g.phase, inviteWaiting]);
+  useEffect(() => onPushOpened((d) => {
+    if (engine.getState().phase !== 'menu') return; // never pull someone out of a game
+    openNotification({ kind: d.kind ?? '', challengeId: d.challengeId ?? null });
+  }), []);
 
   // Ad-free purchase: verified with the store for this account; load an ad early if one is due.
   useEffect(() => {

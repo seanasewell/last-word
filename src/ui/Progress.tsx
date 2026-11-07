@@ -200,7 +200,7 @@ function WeeklyChallenges() {
 }
 
 // ── Streak ─────────────────────────────────────────────────────────────────
-function StreakCard() {
+export function StreakCard() {
   const p = useProgress();
   const current = p.streak.current;
   const today = p.today || dayKey();
@@ -324,8 +324,6 @@ export function RewardsTab() {
   return (
     <View style={{ gap: 24 }}>
       <Text style={s.h1}>Rewards</Text>
-      <LevelCard large />
-      <StreakCard />
       <DailyChallenges />
       <WeeklyChallenges />
       <AchievementCollection />

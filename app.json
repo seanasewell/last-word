@@ -17,7 +17,10 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "associatedDomains": [
+        "applinks:seanasewell.github.io"
+      ]
     },
     "android": {
       "package": "com.studiosewell.lastword",
@@ -33,7 +36,24 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "seanasewell.github.io",
+              "pathPrefix": "/invite"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "output": "server",
@@ -79,6 +99,12 @@
           "iosAppId": "ca-app-pub-3940256099942544~1458002511",
           "androidAppId": "ca-app-pub-3940256099942544~3347511713",
           "delayAppMeasurementInit": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "sounds": []
         }
       ]
     ],
