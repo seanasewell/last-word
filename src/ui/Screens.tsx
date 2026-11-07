@@ -8,7 +8,7 @@ import { engine, HUMAN_ID, TOTAL_ROUNDS, type GameState } from '@/lib/engine';
 import type { Player } from '@/lib/players';
 import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Stat, Tile, useAnimatedNumber, useCountdown, useNow, BotBadge, isBot } from './kit';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
-import { ProgressHint, XpChip, afterCelebration, usePendingXp } from './Progress';
+import { ProgressHint, XpChip, afterGame, usePendingXp } from './Progress';
 import { ShareButton } from './Share';
 import { sfx } from './sound';
 import { C, F, w } from './theme';
@@ -39,8 +39,8 @@ function ResultActions({ share, shareTitle, onAgain, exitTitle, onExit }: {
   return (
     <>
       {share && <ShareButton variant="gold" title={shareTitle} data={share} />}
-      <Button title="Play again" onPress={() => afterCelebration(onAgain)} />
-      <Button title={exitTitle} variant="ghost" onPress={() => afterCelebration(onExit)} />
+      <Button title="Play again" onPress={() => afterGame(onAgain)} />
+      <Button title={exitTitle} variant="ghost" onPress={() => afterGame(onExit)} />
     </>
   );
 }
@@ -248,8 +248,8 @@ export function EliminationScreen({ s: g }: { s: GameState }) {
           {remaining.map((p) => <Row key={p.id} p={p} onPress={actOn(p)} right={<Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65) }}>{p.totalScore} total</Text>} />)}
         </View>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 'auto', paddingTop: 24 }}>
-          <Button title="Back to lobby" variant="ghost" style={{ flex: 1 }} onPress={() => afterCelebration(() => engine.goMenu())} />
-          <Button title="Play again" style={{ flex: 1 }} onPress={() => afterCelebration(() => engine.startMatch())} />
+          <Button title="Back to lobby" variant="ghost" style={{ flex: 1 }} onPress={() => afterGame(() => engine.goMenu())} />
+          <Button title="Play again" style={{ flex: 1 }} onPress={() => afterGame(() => engine.startMatch())} />
         </View>
         {sheet}
       </PageScroll>

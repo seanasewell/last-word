@@ -161,6 +161,9 @@ export class GameEngine {
 
   /** Called once per finished elimination match for the human player. */
   onMatchEnd(fn: (r: MatchResult) => void) { this.matchListeners.add(fn); return () => { this.matchListeners.delete(fn); }; }
+  /** A game the player finished: an elimination match they were knocked out of or won, or a solo round that ran its full time. */
+  private completeListeners = new Set<(gameId: string) => void>();
+  onGameComplete(fn: (gameId: string) => void) { this.completeListeners.add(fn); return () => { this.completeListeners.delete(fn); }; }
 
   /** Bind the signed-in player's identity. */
   setProfile(id: string, name: string, photo: string | null) {
@@ -421,6 +424,9 @@ export class GameEngine {
 
   /** Count the match for the human once: when they're knocked out or the match ends. */
   private countMatch(won: boolean, placement: number) {
+    // The game is over for the human either way (listeners ignore repeats of the same ID).
+    const gameId = this.state.serverId ?? this.state.matchId;
+    this.completeListeners.forEach((l) => l(gameId));
     if (this.matchCounted) return;
     this.matchCounted = true;
     const me = this.state.players.find((p) => p.id === HUMAN_ID);
@@ -462,6 +468,8 @@ export class GameEngine {
       this.set({ accepting: false, phase: 'sp-results', personalBest: best, newBest, missedLongest: missed });
       const solo = this.solo;
       if (solo) void this.finishSolo(solo);
+      const gameId = solo?.id ?? s.serverId ?? s.matchId;
+      this.completeListeners.forEach((l) => l(gameId));
       return;
     }
 

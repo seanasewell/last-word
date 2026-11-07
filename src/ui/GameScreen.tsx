@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { engine, HUMAN_ID, TOTAL_ROUNDS, type GameState } from '@/lib/engine';
 import { rankByRound, type Player, type WordEntry } from '@/lib/players';
 import { REJECTION_TEXT } from '@/lib/words';
+import { afterGame } from './Progress';
 import { sfx } from './sound';
 import { Avatar, Card, ordinal, s, Screen, Tile, useAnimatedNumber, useNow, BotBadge, isBot } from './kit';
 import { C, F, w } from './theme';
@@ -352,7 +353,7 @@ export function GameScreen({ s: g }: { s: GameState }) {
         {spectating ? (
           <View style={{ marginHorizontal: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 18, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, paddingHorizontal: 16, paddingVertical: 12 }}>
             <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>You placed <Text style={{ fontFamily: F.bodyBold, color: C.white }}>{ordinal(me.placement || 0)}</Text> · watching the rest</Text>
-            <Pressable onPress={() => engine.goMenu()} hitSlop={10}><Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.primary }}>Leave</Text></Pressable>
+            <Pressable onPress={() => afterGame(() => engine.goMenu())} hitSlop={10}><Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.primary }}>Leave</Text></Pressable>
           </View>
         ) : (
           <WordInput key={`input-${roundKey}`} final={final} />

@@ -3,6 +3,8 @@ import { AppState } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { accounts } from '@/lib/account';
+import { ads } from '@/lib/ads';
+import { purchases } from '@/lib/purchases';
 import { engine } from '@/lib/engine';
 import { progress } from '@/lib/progress';
 import { AuthFlow, Onboarding } from './Auth';
@@ -11,6 +13,7 @@ import { Home } from './Home';
 import { useAuth, useGame } from './kit';
 import { startGameMusic, stopGameMusic } from './sound';
 import { CelebrationHost } from './Progress';
+import { SimulatedAdHost } from './RemoveAds';
 import { EliminationScreen, FinalResults, Lobby, SoloCountdown, SoloResults } from './Screens';
 
 /** Screen flow for the whole app: sign-in, onboarding, then the game's phases. */
@@ -21,6 +24,9 @@ export function LastWordApp() {
 
   // The server records each match; refresh wins and stats once it's decided for this player.
   useEffect(() => engine.onMatchEnd(() => { void accounts.afterMatch(); }), []);
+
+  // Every finished game (elimination or solo) counts toward the next ad.
+  useEffect(() => engine.onGameComplete((gameId) => ads.gameCompleted(gameId)), []);
 
   // Save a new solo personal best to the profile.
   useEffect(() => {
@@ -35,6 +41,12 @@ export function LastWordApp() {
     if (id) { progress.use(id); engine.setProfile(id, name || 'You', photo); }
     else engine.goMenu();
   }, [id, name, photo]);
+
+  // Ad-free purchase: verified with the store for this account; load an ad early if one is due.
+  useEffect(() => {
+    if (!id) return;
+    void purchases.start(id).then(() => ads.warmUp());
+  }, [id]);
 
   // Back into an unfinished match after the app was closed (on launch and when it returns to the foreground).
   const ready = !!id && !auth.onboarding;
@@ -77,6 +89,7 @@ export function LastWordApp() {
         {screen}
       </Animated.View>
       <CelebrationHost />
+      <SimulatedAdHost />
     </>
   );
 }

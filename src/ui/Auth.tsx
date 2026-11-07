@@ -4,6 +4,9 @@ import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, V
 import { accounts } from '@/lib/account';
 import { engine } from '@/lib/engine';
 import { nameAllowed } from '@/lib/nameFilter';
+import { ads, setSimAdFails, simAdFails, useAdCounter } from '@/lib/ads';
+import { GAMES_PER_AD } from '@/lib/monetizationConfig';
+import { purchases, setSimOutcome, simOutcome, useAdFree, type SimOutcome } from '@/lib/purchases';
 import { PRIVACY_URL, SHOW_DEV_TOOLS, TERMS_URL } from '@/lib/release';
 import type { Provider } from '@/lib/social';
 import { COUNTRIES, countryByCode } from '@/lib/regions';
@@ -33,6 +36,33 @@ function Step({ children, footer }: { children: React.ReactNode; footer?: React.
 }
 
 // ── Developer controls ─────────────────────────────────────────────────────
+/** Testing ads and the Remove ads purchase (simulated in Expo Go; test ads in internal builds). */
+function AdDevRows() {
+  const counter = useAdCounter();
+  const st = useAdFree();
+  const [outcome, setOutcome] = useState(simOutcome);
+  const [adFails, setAdFails] = useState(simAdFails);
+  const next: Record<SimOutcome, SimOutcome> = { success: 'fail', fail: 'cancel', cancel: 'success' };
+  const label: Record<SimOutcome, string> = { success: 'Succeeds', fail: 'Fails', cancel: 'Is cancelled' };
+  return (
+    <>
+      <DevRow title={`Ad counter: ${counter.count} / ${GAMES_PER_AD}`} sub={`Ads: ${counter.provider} · ${st.adFree ? 'ad-free, no ads' : 'tap to make an ad due now (also skips the 1-minute launch wait)'}`}
+        onPress={() => { ads.devSetCount(GAMES_PER_AD); ads.devIgnoreLaunchDelay(); ads.warmUp(); }} right={<Text style={{ color: w(0.55) }}>→</Text>} />
+      {counter.provider === 'simulated' && (
+        <DevRow title={`Test ad: ${adFails ? 'fails to load' : 'loads'}`} sub="Tap to switch; a failing ad lets play continue without one"
+          onPress={() => { setSimAdFails(!adFails); setAdFails(!adFails); }} />
+      )}
+      {st.provider === 'simulated' && (
+        <>
+          <DevRow title={`Test purchase: ${label[outcome]}`} sub="Tap to switch what the next simulated Remove ads purchase does"
+            onPress={() => { const o = next[outcome]; setSimOutcome(o); setOutcome(o); }} />
+          <DevRow title="Undo test purchase" sub={st.adFree ? 'Brings ads back on this phone' : 'No test purchase yet'} onPress={() => purchases.devResetSimulated()} />
+        </>
+      )}
+    </>
+  );
+}
+
 function DevRow({ title, sub, onPress, right, danger, armed }: { title: string; sub: string; onPress?: () => void; right?: React.ReactNode; danger?: boolean; armed?: boolean }) {
   return (
     <Pressable onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, backgroundColor: armed ? 'rgba(255,93,115,0.15)' : w(0.05), paddingHorizontal: 16, paddingVertical: 14 }}>
@@ -80,6 +110,7 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
             <DevRow title="Jump to the championship round" sub="A 1v1 against a bot, as if you'd survived rounds 1–4. Played on this phone only; not counted toward ranks or XP"
               onPress={() => { onClose(); engine.devStartChampionship(); }} right={<Text style={{ color: w(0.55) }}>→</Text>} />
             <DevRow title="Restart onboarding" sub="Clears name, photo and region for this account" onPress={() => run(() => accounts.devRestartOnboarding())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
+            <AdDevRows />
           </>
         )}
         <DevRow danger armed={confirmReset} title={confirmReset ? 'Tap again to sign out and clear' : 'Reset this phone'} sub="Signs out and clears this phone. A guest player can't be recovered"

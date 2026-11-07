@@ -15,6 +15,7 @@ import { Avatar, Button, Card, FadeUp, OptionSheet, ordinal, s, Screen, Sheet, T
 import { pickPhoto } from './photo';
 import { DailyChallenges, LevelCard, LevelingGuide, RewardsTab, SweepBorder } from './Progress';
 import { MatchFaces } from './MatchFaces';
+import { AdvertisementsSection } from './RemoveAds';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { PROVIDER_NAME, SaveProgressCard, SaveProgressNudge } from './SignIn';
 import { musicEnabled, onSoundChange, setMusicEnabled, setSoundEnabled, soundEnabled } from './sound';
@@ -391,6 +392,8 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
           <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{account.region}  ›</Text>
         </Pressable>
       </View>
+
+      <AdvertisementsSection />
 
       <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Settings</Text>
       <View style={{ borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' }}>

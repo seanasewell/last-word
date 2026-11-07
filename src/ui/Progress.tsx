@@ -15,6 +15,7 @@ import {
   achievementById, dayKey, levelFromXp, nextMidnight, nextMonday, progress, titleFor, totalXpFor, viewAchievement, weekStart,
   type AchievementView, type Celebration, type ChallengeDef, type ProgressState,
 } from '@/lib/progress';
+import { ads } from '@/lib/ads';
 import { Button, s, useNow } from './kit';
 import { C, F, w } from './theme';
 
@@ -370,6 +371,14 @@ export function ProgressHint() {
 let showCelebration: ((c: Celebration, then: () => void) => void) | null = null;
 
 /** Run `action`, first showing the pop-up if the game that just ended raised the level or unlocked achievements. */
+/**
+ * Leaving a finished game's results: celebrations first, then an interstitial if one is
+ * due (every 3 completed games, never for ad-free players), then the action.
+ */
+export function afterGame(action: () => void) {
+  afterCelebration(() => { void ads.maybeShow().finally(action); });
+}
+
 export function afterCelebration(action: () => void) {
   void progress.takeCelebration().then((c) => {
     if (c && showCelebration) showCelebration(c, action);
