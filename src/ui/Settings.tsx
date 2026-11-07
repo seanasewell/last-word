@@ -10,6 +10,7 @@ import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { scoreWord } from '@/lib/words';
 import { cleanName, DevControls, NAME_MAX, nameError } from './Auth';
 import { Avatar, Button, OptionSheet, s, Sheet, TextField, Toggle } from './kit';
+import { pickPhoto } from './photo';
 import { LevelingGuide } from './Progress';
 import { AdvertisementsSection } from './RemoveAds';
 import { PROVIDER_NAME, SaveProgressCard } from './SignIn';
@@ -45,7 +46,17 @@ export const MenuLabel = ({ emoji, text }: { emoji: string; text: string }) => (
 export function SettingsScreen({ account }: { account: Account }) {
   const [name, setName] = useState(account.name);
   const [saved, setSaved] = useState(false);
-  const [sheet, setSheet] = useState<null | 'country' | 'region' | 'delete' | 'signout' | 'dev' | 'blocked' | 'scoring' | 'leveling'>(null);
+  const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'delete' | 'signout' | 'dev' | 'blocked' | 'scoring' | 'leveling'>(null);
+  const [photoErr, setPhotoErr] = useState<string | null>(null);
+  const choosePhoto = async (source: 'library' | 'camera') => {
+    setSheet(null);
+    const r = await pickPhoto(source);
+    if (!r) return;
+    if ('error' in r) { setPhotoErr(r.error); return; }
+    setPhotoErr(null);
+    const e = await accounts.update({ photo: r.uri });
+    if (e) setPhotoErr(e);
+  };
   const [sound, setSound] = useState(soundEnabled);
   const [musicOn, setMusicOn] = useState(musicEnabled);
   useEffect(() => onSoundChange(() => { setSound(soundEnabled()); setMusicOn(musicEnabled()); }), []);
@@ -83,6 +94,17 @@ export function SettingsScreen({ account }: { account: Account }) {
             <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{PROVIDER_NAME[account.provider]}</Text>
           </View>
         )}
+        <Pressable onPress={() => setSheet('photo')} accessibilityRole="button" accessibilityLabel={account.photo ? 'Change profile photo' : 'Add profile photo'}
+          style={({ pressed }) => [row, { backgroundColor: pressed ? w(0.04) : 'transparent' }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Avatar player={{ glyph: account.name[0]?.toUpperCase() ?? 'Y', hue: 210, isYou: true, photo: account.photo }} size={40} />
+            <View>
+              <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>Profile photo</Text>
+              {photoErr && <Text style={{ fontFamily: F.body, fontSize: 12, color: C.coral, marginTop: 2 }}>{photoErr}</Text>}
+            </View>
+          </View>
+          <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.primary }}>{account.photo ? 'Change' : 'Add photo'}</Text>
+        </Pressable>
         <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.divider }}>
           <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.7) }}>Display name</Text>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
@@ -167,6 +189,17 @@ export function SettingsScreen({ account }: { account: Account }) {
         </Pressable>
       </View>
 
+      <Sheet open={sheet === 'photo'} onClose={() => setSheet(null)} title="Profile photo">
+        <View style={{ gap: 10 }}>
+          <Button title="Choose from library" onPress={() => void choosePhoto('library')} />
+          <Button title="Take a photo" variant="ghost" onPress={() => void choosePhoto('camera')} />
+          {account.photo && (
+            <Pressable onPress={() => { void accounts.update({ photo: null }); setSheet(null); }} style={{ alignItems: 'center', paddingVertical: 10 }}>
+              <Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.coral }}>Remove photo</Text>
+            </Pressable>
+          )}
+        </View>
+      </Sheet>
       <Sheet open={sheet === 'scoring'} onClose={() => setSheet(null)} title="How scoring works">
         <ScoringGuide />
         <Button title="Close" variant="ghost" style={{ marginTop: 20 }} onPress={() => setSheet(null)} />

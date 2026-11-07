@@ -8,9 +8,8 @@ import { social, useSocial } from '@/lib/challenges';
 import { engine, type GameState } from '@/lib/engine';
 import { fetchModeLeaderboard, type Leaderboard, type RankEntry, type RankMode, type Scope } from '@/lib/ranks';
 import { countryByCode } from '@/lib/regions';
-import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Sheet, TileLogo, useNow } from './kit';
+import { Avatar, Card, FadeUp, ordinal, s, Screen, TileLogo, useNow } from './kit';
 import { nav, useNav, type Route } from './nav';
-import { pickPhoto } from './photo';
 import { DailyChallenges, LevelCard, RewardsTab, StreakCard, SweepBorder } from './Progress';
 import { MatchFaces } from './MatchFaces';
 import { SettingsScreen } from './Settings';
@@ -59,10 +58,12 @@ const MATCH_FACES = [
   require('@/assets/avatars/bot5.jpg'),
 ];
 
-/** The tile logo sized to span the screen, with 12px on each side. */
-function FullWidthLogo() {
+/** The tile logo sized to fill the header row next to the notification bell. */
+const BELL_SIZE = 40;
+const BELL_GAP = 12;
+function HeaderLogo() {
   const { width } = useWindowDimensions();
-  const avail = Math.min(width, 480) - 24;
+  const avail = Math.min(width, 480) - 24 - BELL_SIZE - BELL_GAP;
   const gap = Math.max(2, Math.round((avail / 8.91) * 0.13));
   const size = Math.floor(((avail - 7 * gap) / 8) * 100) / 100;
   return <TileLogo size={size} />;
@@ -79,7 +80,7 @@ function Bell() {
   return (
     <Pressable onPress={() => nav.push({ name: 'notifications' })} hitSlop={10} accessibilityRole="button"
       accessibilityLabel={unread ? `Notifications, ${unread} unread` : 'Notifications'}
-      style={({ pressed }) => ({ position: 'absolute', top: -6, right: 0, width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? w(0.08) : 'transparent', zIndex: 2 })}>
+      style={({ pressed }) => ({ width: BELL_SIZE, height: BELL_SIZE, borderRadius: BELL_SIZE / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? w(0.08) : 'transparent' })}>
       <Text style={{ fontSize: 21 }}>🔔</Text>
       {unread > 0 && (
         <View style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, paddingHorizontal: 4, borderRadius: 8, backgroundColor: C.coral, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.bg }}>
@@ -95,8 +96,10 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
   const yourTurn = c?.your_turn ?? 0;
   return (
     <View>
-      <Bell />
-      <View style={{ paddingTop: 36 }}><FullWidthLogo /></View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: BELL_GAP, paddingTop: 8 }}>
+        <HeaderLogo />
+        <Bell />
+      </View>
 
       <FadeUp delay={60} style={{ marginTop: 24 }}><LevelCard /></FadeUp>
       <SaveProgressNudge account={account} />
@@ -161,7 +164,6 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
 
 // ── Ranks ──────────────────────────────────────────────────────────────────
 const PERIODS: { id: Period; label: string; phrase: string }[] = [
-  { id: 'day', label: 'Today', phrase: 'today' },
   { id: 'week', label: 'Week', phrase: 'this week' },
   { id: 'month', label: 'Month', phrase: 'this month' },
   { id: 'year', label: 'Year', phrase: 'this year' },
@@ -221,7 +223,7 @@ const MODES: { id: RankMode; label: string }[] = [
 const MODE_TEXT: Record<RankMode, { sub: string; empty: string; emptyBody: (phrase: string) => string; unit: (n: number) => string }> = {
   elimination: { sub: 'Most elimination-match wins', empty: 'No winners yet', emptyBody: (p) => `Win an elimination match ${p === 'all time' ? '' : p} to be first on this board.`, unit: (n) => (n === 1 ? 'win' : 'wins') },
   solo: { sub: 'Best single solo score', empty: 'No scores yet', emptyBody: (p) => `Play a solo challenge ${p === 'all time' ? '' : p} to be first on this board.`, unit: () => 'best' },
-  '1v1': { sub: 'Most 1v1 wins', empty: 'No 1v1 results yet', emptyBody: (p) => `Win a 1v1 challenge ${p === 'all time' ? '' : p} to be first on this board.`, unit: (n) => (n === 1 ? 'win' : 'wins') },
+  '1v1': { sub: 'Best 1v1 records', empty: 'No 1v1 results yet', emptyBody: (p) => `Win a 1v1 challenge ${p === 'all time' ? '' : p} to be first on this board.`, unit: (n) => (n === 1 ? 'win' : 'wins') },
 };
 
 function RankRow({ e, scope, mode, onPress }: { e: RankEntry; scope: Scope; mode: RankMode; onPress?: () => void }) {
@@ -262,7 +264,9 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
   const [mode, setModeState] = useState<RankMode>(rememberedMode);
   const setMode = (m: RankMode) => { rememberedMode = m; setModeState(m); };
   const [scope, setScope] = useState<Scope>('world');
-  const [period, setPeriod] = useState<Period>('week');
+  const [periodPick, setPeriod] = useState<Period>('week');
+  // 1v1 boards are always all-time records, so there's no time filter for them.
+  const period: Period = mode === '1v1' ? 'all' : periodPick;
   const [board, setBoard] = useState<{ key: string; data: Leaderboard } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const country = countryByCode(account.country);
@@ -295,11 +299,11 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
   return (
     <View>
       <Text style={s.h1}>Ranks</Text>
-      <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.72), marginTop: 4 }}>{t.sub} · {periodRange(period, new Date(now))}</Text>
+      <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.72), marginTop: 4 }}>{mode === '1v1' ? `${t.sub} · All time` : `${t.sub} · ${periodRange(period, new Date(now))}`}</Text>
       <View style={{ gap: 8, marginTop: 16 }}>
         <Segmented options={MODES} value={mode} onChange={setMode} />
         <Segmented options={scopes} value={scope} onChange={setScope} small />
-        <Segmented options={PERIODS} value={period} onChange={setPeriod} small />
+        {mode !== '1v1' && <Segmented options={PERIODS} value={period} onChange={setPeriod} small />}
       </View>
       <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, padding: 16 }}>
         <Avatar player={meAvatar(account)} size={44} />
@@ -366,19 +370,8 @@ function SocialRow({ emoji, label, detail, badge, onPress, last = false }: { emo
 }
 
 function ProfileTab({ account, best }: { account: Account; best: number }) {
-  const [sheet, setSheet] = useState<null | 'photo'>(null);
-  const [photoErr, setPhotoErr] = useState<string | null>(null);
   const c = useSocial();
   const country = countryByCode(account.country);
-  const choose = async (source: 'library' | 'camera') => {
-    setSheet(null);
-    const r = await pickPhoto(source);
-    if (!r) return;
-    if ('error' in r) { setPhotoErr(r.error); return; }
-    setPhotoErr(null);
-    const err = await accounts.update({ photo: r.uri });
-    if (err) setPhotoErr(err);
-  };
   const eliminationWins = Math.max(c?.elimination_wins ?? 0, account.totalWins);
   const soloBest = Math.max(c?.solo_best ?? 0, best);
   const record = c?.record ?? { wins: 0, losses: 0, draws: 0 };
@@ -395,15 +388,9 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         </Pressable>
       </View>
       <View style={{ alignItems: 'center', marginTop: 10 }}>
-        <Pressable onPress={() => setSheet('photo')} accessibilityLabel="Change photo">
-          <Avatar player={meAvatar(account)} size={104} ring />
-        </Pressable>
+        <Avatar player={meAvatar(account)} size={104} ring />
         <Text style={{ fontFamily: F.displayBold, fontSize: 22, color: C.white, marginTop: 12 }}>{account.name}</Text>
         <Text style={{ fontFamily: F.body, fontSize: 13, color: w(0.65), marginTop: 2 }}>{country.flag} {account.region}</Text>
-        <Pressable onPress={() => setSheet('photo')} hitSlop={8} style={{ marginTop: 8 }}>
-          <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.primary }}>{account.photo ? 'Change photo' : 'Add photo'}</Text>
-        </Pressable>
-        {photoErr && <Text style={{ marginTop: 6, fontFamily: F.body, fontSize: 13, color: C.coral }}>{photoErr}</Text>}
       </View>
 
       <View style={{ marginTop: 20, gap: 12 }}>
@@ -422,7 +409,7 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         </Card>
       </View>
       <Pressable onPress={() => nav.push({ name: 'challenges', tab: 'history' })}>
-        <Card style={{ marginTop: 8, paddingVertical: 14 }}>
+        <Card style={{ marginTop: 12, paddingVertical: 14 }}>
           <Text style={[s.eyebrow, { textAlign: 'center', marginBottom: 8 }]}>1v1 record</Text>
           <RecordStats r={record} />
         </Card>
@@ -433,14 +420,6 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         <SocialRow emoji="👥" label="Friends" detail={`${friends} ${friends === 1 ? 'friend' : 'friends'}`} badge={c?.requests} onPress={() => nav.push({ name: 'friends' })} />
         <SocialRow emoji="⚔️" label="1v1 challenges" detail={`${active} active`} badge={c?.your_turn} onPress={() => nav.push({ name: 'challenges' })} last />
       </View>
-
-      <Sheet open={sheet === 'photo'} onClose={() => setSheet(null)} title="Profile photo">
-        <View style={{ gap: 10 }}>
-          <Button title="Choose from library" onPress={() => choose('library')} />
-          <Button title="Take a photo" variant="ghost" onPress={() => choose('camera')} />
-          {account.photo && <Pressable onPress={() => { void accounts.update({ photo: null }); setSheet(null); }} style={{ alignItems: 'center', paddingVertical: 10 }}><Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.coral }}>Remove photo</Text></Pressable>}
-        </View>
-      </Sheet>
     </View>
   );
 }
