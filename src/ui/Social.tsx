@@ -628,7 +628,7 @@ export function ChallengeScreen({ id }: { id: string }) {
 function ResultHeader({ d }: { d: ChallengeDetail }) {
   const other: Person = d.other ?? { id: null, name: 'Deleted player', photo_url: null };
   const win = d.outcome === 'win';
-  const title = d.outcome === 'draw' ? "It's a draw" : win ? 'You win! 🏆' : `${other.name} wins`;
+  const title = d.outcome === 'draw' ? "It's a draw" : win ? 'You win! 🏆' : `${other.name} wins 😢`;
   const side = (p: Person, score: number | null, lead: boolean) => (
     <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
       <PersonAvatar p={p} size={64} />
@@ -639,8 +639,9 @@ function ResultHeader({ d }: { d: ChallengeDetail }) {
   return (
     <Card style={{ padding: 20, borderColor: win ? 'rgba(255,181,71,0.45)' : C.cardBorder, backgroundColor: win ? 'rgba(255,181,71,0.08)' : C.card }}>
       <Text style={{ fontFamily: F.displayBold, fontSize: 26, color: win ? C.amber : C.white, textAlign: 'center' }}>{title}</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16 }}>
         {side(d.me, d.my_score, d.outcome === 'win')}
+        <Text style={{ fontFamily: F.display, fontSize: 18, color: w(0.5) }}>vs</Text>
         {side(other, d.their_score, d.outcome === 'loss')}
       </View>
       {d.forfeit && (
@@ -667,16 +668,16 @@ function WordChips({ words, highlight }: { words: string[]; highlight?: Set<stri
 function WordCompare({ mine, theirs, otherName }: { mine: { word: string; points: number }[]; theirs: { word: string; points: number }[]; otherName: string }) {
   const a = new Set(mine.map((x) => x.word));
   const b = new Set(theirs.map((x) => x.word));
-  const onlyMine = new Set([...a].filter((x) => !b.has(x)));
-  const onlyTheirs = new Set([...b].filter((x) => !a.has(x)));
+  // Green: words you both found. The rest stay plain.
   const both = [...a].filter((x) => b.has(x));
+  const shared = new Set(both);
   return (
     <>
       <Eyebrow right={`${mine.length} words`}>Your words</Eyebrow>
-      <WordChips words={mine.map((x) => x.word)} highlight={onlyMine} />
+      <WordChips words={mine.map((x) => x.word)} highlight={shared} />
       <Eyebrow right={`${theirs.length} words`}>{`${otherName}'s words`}</Eyebrow>
-      <WordChips words={theirs.map((x) => x.word)} highlight={onlyTheirs} />
-      <Text style={[sub, { marginTop: 10 }]}>{both.length} {both.length === 1 ? 'word' : 'words'} found by both. Green words only one of you found.</Text>
+      <WordChips words={theirs.map((x) => x.word)} highlight={shared} />
+      <Text style={[sub, { marginTop: 10 }]}>{both.length} {both.length === 1 ? 'word' : 'words'} found by both, shown in green.</Text>
     </>
   );
 }
@@ -710,7 +711,7 @@ export function useChallengeOutcome(challengeId: string): { d: ChallengeDetail |
 }
 
 /** The result (or "locked in" while the other player hasn't played), then both players' words. */
-export function ChallengeOutcome({ d, err, myWords }: { d: ChallengeDetail | null; err: boolean; myWords: { word: string; points: number }[] }) {
+export function ChallengeOutcome({ d, err, myWords, stats }: { d: ChallengeDetail | null; err: boolean; myWords: { word: string; points: number }[]; stats?: React.ReactNode }) {
   if (err) return <Text style={[sub, { textAlign: 'center' }]}>{"Couldn't load the result yet. Open it from 1v1 challenges."}</Text>;
   if (!d) return <Loading />;
   if (d.status !== 'completed') {
@@ -720,6 +721,7 @@ export function ChallengeOutcome({ d, err, myWords }: { d: ChallengeDetail | nul
           <Text style={{ fontFamily: F.displayBold, fontSize: 17, color: C.white, textAlign: 'center' }}>Your score is locked in ⚔️</Text>
           <Text style={[sub, { textAlign: 'center', marginTop: 4 }]}>{`We'll let you know when ${d.other?.name ?? 'your opponent'} plays.`}</Text>
         </Card>
+        {stats}
         <Eyebrow right={`${myWords.length} words`}>Your words</Eyebrow>
         <WordChips words={myWords.map((x) => x.word)} />
       </>
@@ -728,6 +730,7 @@ export function ChallengeOutcome({ d, err, myWords }: { d: ChallengeDetail | nul
   return (
     <>
       <ResultHeader d={d} />
+      {stats}
       <WordCompare mine={d.my_words} theirs={d.their_words ?? []} otherName={d.other?.name ?? 'Opponent'} />
     </>
   );
