@@ -32,6 +32,19 @@ function PageScroll({ children, gold = false, footer }: { children: React.ReactN
   );
 }
 
+/** The pinned buttons under every results page: share (gold), play again (blue), leave (ghost). */
+function ResultActions({ share, shareTitle, onAgain, exitTitle, onExit }: {
+  share?: React.ComponentProps<typeof ShareButton>['data']; shareTitle: string; onAgain: () => void; exitTitle: string; onExit: () => void;
+}) {
+  return (
+    <>
+      {share && <ShareButton variant="gold" title={shareTitle} data={share} />}
+      <Button title="Play again" onPress={() => afterCelebration(onAgain)} />
+      <Button title={exitTitle} variant="ghost" onPress={() => afterCelebration(onExit)} />
+    </>
+  );
+}
+
 /** Tap a real player (not a bot, not you) in an online match to report or block them. */
 function usePlayerActions() {
   const [acting, setActing] = useState<PlayerRef | null>(null);
@@ -330,11 +343,8 @@ export function FinalResults({ s: g }: { s: GameState }) {
   return (
     <View style={{ flex: 1 }}>
       <PageScroll gold footer={(
-        <>
-          {youWon && <ShareButton variant="gold" title="Share your win" data={{ kind: 'match', name: me.name, points: me.totalScore, bestWord: me.stats.bestWord, wordsFound: me.stats.wordsFound }} />}
-          <Button title="Play again" onPress={() => afterCelebration(() => engine.startMatch())} />
-          <Button title="Back to lobby" variant="ghost" onPress={() => afterCelebration(() => engine.goMenu())} />
-        </>
+        <ResultActions shareTitle="Share your win" share={youWon ? { kind: 'match', name: me.name, points: me.totalScore, bestWord: me.stats.bestWord, wordsFound: me.stats.wordsFound } : undefined}
+          onAgain={() => engine.startMatch()} exitTitle="Back to lobby" onExit={() => engine.goMenu()} />
       )}>
         <FadeUp style={{ alignItems: 'center', paddingTop: 20 }}>
           <Text style={{ fontSize: 44, marginBottom: -18, marginTop: 4, zIndex: 2 }}>👑</Text>
@@ -380,7 +390,11 @@ export function SoloResults({ s: g }: { s: GameState }) {
   const me = g.players[0];
   const score = useAnimatedNumber(me.roundScore, 1100);
   return (
-    <PageScroll>
+    <PageScroll footer={(
+      <ResultActions shareTitle="Share your score"
+        share={me.roundScore > 0 ? { kind: 'solo', name: me.name, points: me.roundScore, bestWord: me.stats.bestWord, wordsFound: me.roundWords.length, source: g.source, newBest: g.newBest } : undefined}
+        onAgain={() => engine.startSingle()} exitTitle="Main menu" onExit={() => engine.goMenu()} />
+    )}>
       <FadeUp style={{ alignItems: 'center', paddingTop: 16 }}>
         <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.7) }}>{`Time's up · ${g.source}`}</Text>
         <Text style={[{ fontFamily: F.display, fontSize: 72, color: C.amber }, s.tabular]}>{score}</Text>
@@ -418,15 +432,6 @@ export function SoloResults({ s: g }: { s: GameState }) {
           </View>
         </>
       )}
-      <View style={{ marginTop: 'auto', paddingTop: 24, gap: 10 }}>
-        {me.roundScore > 0 && (
-          <ShareButton variant="ghost" title="Share your score" data={{ kind: 'solo', name: me.name, points: me.roundScore, bestWord: me.stats.bestWord, wordsFound: me.roundWords.length, source: g.source, newBest: g.newBest }} />
-        )}
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <Button title="Main menu" variant="ghost" style={{ flex: 1 }} onPress={() => afterCelebration(() => engine.goMenu())} />
-          <Button title="Play again" style={{ flex: 1 }} onPress={() => afterCelebration(() => engine.startSingle())} />
-        </View>
-      </View>
     </PageScroll>
   );
 }
