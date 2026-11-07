@@ -384,7 +384,7 @@ function statusLabel(c: ChallengeRow): string {
   if (c.status === 'declined') return 'Declined';
   if (c.status === 'cancelled') return 'Cancelled';
   if (c.status === 'pending') return 'Waiting for them to accept';
-  if (c.your_turn) return c.they_played ? 'Your turn · they’ve played' : 'Your turn';
+  if (c.your_turn) return 'Your turn';
   return 'Waiting for them to play';
 }
 
