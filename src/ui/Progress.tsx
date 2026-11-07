@@ -377,6 +377,29 @@ export function afterCelebration(action: () => void) {
   });
 }
 
+/** Unlocked achievements, one per page: swipe sideways, with "1 / 8" underneath. */
+function AchievementCarousel({ children }: { children: React.ReactNode[] }) {
+  const [width, setWidth] = useState(0);
+  const [page, setPage] = useState(0);
+  const count = children.length;
+  const onScroll = (x: number) => { if (width) setPage(Math.max(0, Math.min(count - 1, Math.round(x / width)))); };
+  return (
+    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      {width > 0 && (
+        <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} decelerationRate="fast" scrollEventThrottle={32}
+          onScroll={(e) => onScroll(e.nativeEvent.contentOffset.x)}>
+          {children.map((child, i) => <View key={i} style={{ width }}>{child}</View>)}
+        </ScrollView>
+      )}
+      {count > 1 && (
+        <Text accessibilityLabel={`Achievement ${page + 1} of ${count}`} style={[{ marginTop: 10, textAlign: 'center', fontFamily: F.bodySemi, fontSize: 13, color: w(0.7) }, s.tabular]}>
+          {page + 1} / {count}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 export function CelebrationHost() {
   const [state, setState] = useState<{ c: Celebration; then: () => void } | null>(null);
   useEffect(() => { showCelebration = (c, then) => setState({ c, then }); return () => { showCelebration = null; }; }, []);
@@ -404,18 +427,16 @@ export function CelebrationHost() {
                 <View style={{ alignSelf: 'stretch', marginTop: levelUp ? 24 : 12 }}>
                   {levelUp && <Text style={[s.eyebrow, { marginBottom: 8 }]}>{items.length === 1 ? 'Achievement unlocked' : `${items.length} achievements unlocked`}</Text>}
                   {!levelUp && <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 14, color: w(0.7), marginBottom: 12 }}>{items.length === 1 ? '1 new achievement earned' : `${items.length} new achievements earned`}</Text>}
-                  <View style={{ gap: 8 }}>
+                  <AchievementCarousel>
                     {items.map((a) => (
-                      <View key={a.id} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 18 }]}>
-                        <Badge v={viewAchievement(p, a)} size={52} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.white }}>{a.name}</Text>
-                          {a.desc !== a.name && <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.7), marginTop: 2 }}>{a.desc}</Text>}
-                        </View>
-                        <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.amber }}>+{a.xp} XP</Text>
+                      <View key={a.id} style={[s.card, { alignItems: 'center', gap: 6, paddingVertical: 20, paddingHorizontal: 16, borderRadius: 20 }]}>
+                        <Badge v={viewAchievement(p, a)} size={72} />
+                        <Text style={{ marginTop: 6, fontFamily: F.bodyBold, fontSize: 16, color: C.white, textAlign: 'center' }}>{a.name}</Text>
+                        {a.desc !== a.name && <Text style={{ fontFamily: F.body, fontSize: 13, color: w(0.7), textAlign: 'center' }}>{a.desc}</Text>}
+                        <Text style={{ marginTop: 2, fontFamily: F.bodyBold, fontSize: 14, color: C.amber }}>+{a.xp} XP</Text>
                       </View>
                     ))}
-                  </View>
+                  </AchievementCarousel>
                 </View>
               )}
             </ScrollView>
