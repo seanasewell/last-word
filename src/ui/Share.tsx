@@ -51,10 +51,10 @@ function Line({ y, size, k, font, color, children, fit = false, spacing = 0 }: {
 export function ShareCard({ d, width }: { d: ShareData; width: number }) {
   const k = width / W;
   const match = d.kind === 'match';
-  const scoreY = match ? 590 : 760;
-  const gy = match ? 510 : 600;
-  const cardY = match ? 790 : 900;
-  const cardH = match ? 250 : 300;
+  const scoreY = match ? 590 : 660;
+  const gy = match ? 510 : 540;
+  const cardY = match ? 790 : 810;
+  const cardH = 250;
   return (
     <View style={{ width, height: H * k, overflow: 'hidden', backgroundColor: C.bg }}>
       <LinearGradient colors={['#2A5FB8', '#122C5C', '#081428']} locations={[0, 0.5, 1]} style={StyleSheet.absoluteFill} />
@@ -75,23 +75,22 @@ export function ShareCard({ d, width }: { d: ShareData; width: number }) {
       ) : (
         <>
           <Line y={330} size={34} k={k} font={F.bodyBold} color="#9CC3FF" spacing={8}>{d.newBest ? 'SOLO CHALLENGE · NEW PERSONAL BEST' : 'SOLO CHALLENGE'}</Line>
-          <Line y={430} size={76} k={k} font={F.display} color={C.white}>{`${d.name}'s solo score`}</Line>
+          <Line y={430} size={76} k={k} font={F.display} color={C.white}>{`${d.name}'s score`}</Line>
         </>
       )}
 
       <Line y={scoreY} size={220} k={k} font={F.display} color={match ? C.amber : C.white} fit>{fmt(d.points)}</Line>
       <Line y={scoreY + (match ? 92 : 70)} size={40} k={k} font={F.bodySemi} color={w(0.8)}>
-        {match ? 'match points' : `points in 60 seconds${d.wordsFound ? ` · ${d.wordsFound} words` : ''}`}
+        {match ? 'match points' : 'points'}
       </Line>
 
       {d.bestWord && (
         <View style={{ position: 'absolute', left: 90 * k, top: cardY * k, width: (W - 180) * k, height: cardH * k, borderRadius: 40 * k, borderWidth: 3 * k, borderColor: 'rgba(61,139,255,0.5)', backgroundColor: 'rgba(61,139,255,0.14)' }} />
       )}
-      {d.bestWord && <Line y={cardY + 66} size={32} k={k} font={F.bodyBold} color={w(0.75)} spacing={8}>BEST WORD</Line>}
+      {d.bestWord && <Line y={cardY + 66} size={32} k={k} font={F.bodyBold} color={w(0.75)} spacing={8}>LONGEST WORD</Line>}
       {d.bestWord && <TileRow text={d.bestWord.word} cy={cardY + 160} maxW={W - 300} maxSize={92} k={k} gold={match} />}
-      {d.bestWord && !match && <Line y={cardY + 266} size={40} k={k} font={F.display} color={C.amber}>{`+${fmt(d.bestWord.points)} points`}</Line>}
 
-      <Line y={match ? 1200 : 1290} size={36} k={k} font={F.bodyBold} color={w(0.85)}>Can you beat it?</Line>
+      <Line y={1210} size={60} k={k} font={F.display} color={C.white}>Can you beat it?</Line>
     </View>
   );
 }
