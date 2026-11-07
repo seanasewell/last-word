@@ -49,7 +49,7 @@ export function initSound() {
   trackPlayer('rounds');
   trackPlayer('championship');
   (Object.keys(RESULTS) as ResultMusic[]).forEach((k) => {
-    try { const p = createAudioPlayer(RESULTS[k]); p.volume = MUSIC_VOLUME; resultPlayers.set(k, p); } catch { /* audio unavailable */ }
+    try { const p = createAudioPlayer(RESULTS[k], SONG); p.volume = MUSIC_VOLUME; resultPlayers.set(k, p); } catch { /* audio unavailable */ }
   });
 }
 
@@ -75,6 +75,9 @@ const RESULTS: Record<ResultMusic, number> = {
   loss: require('@/assets/sounds/loss.m4a'),
 };
 const resultPlayers = new Map<ResultMusic, AudioPlayer>();
+// expo-audio switches the phone's audio session off 0.1 s after any pause() if nothing is playing
+// yet, which silences a song that's still loading. Song players keep the session on instead.
+const SONG = { keepAudioSessionActive: true } as const;
 let resultOn = false;
 const fades = new Map<MusicTrack, ReturnType<typeof setInterval>>();
 let musicHooked = false;
@@ -94,7 +97,7 @@ function trackPlayer(track: MusicTrack): AudioPlayer | null {
   try {
     let m = musicPlayers.get(track);
     if (!m) {
-      m = createAudioPlayer(TRACKS[track]);
+      m = createAudioPlayer(TRACKS[track], SONG);
       m.loop = true;
       m.volume = MUSIC_VOLUME;
       musicPlayers.set(track, m);
@@ -119,7 +122,7 @@ function cancelFade(track: MusicTrack) {
 function fadeOut(track: MusicTrack) {
   const m = musicPlayers.get(track);
   if (!m || fades.has(track)) return;
-  if (!m.playing) { m.pause(); return; }
+  if (!m.playing) return; // never pause an idle player (see SONG above)
   let v = m.volume;
   fades.set(track, setInterval(() => {
     v -= MUSIC_VOLUME / 10;
@@ -163,7 +166,7 @@ export function startGameMusic(gameId: string, track: MusicTrack) {
 
 function stopResultMusic() {
   resultOn = false;
-  resultPlayers.forEach((p) => p.pause());
+  resultPlayers.forEach((p) => { if (p.playing) p.pause(); });
 }
 
 /** A round's result: pause the game track (it picks up again next round) and play the result song once. */
@@ -173,7 +176,7 @@ export function playResultMusic(kind: ResultMusic) {
   if (!musicEnabled() || AppState.currentState !== 'active') return;
   try {
     let p = resultPlayers.get(kind);
-    if (!p) { p = createAudioPlayer(RESULTS[kind]); p.volume = MUSIC_VOLUME; resultPlayers.set(kind, p); }
+    if (!p) { p = createAudioPlayer(RESULTS[kind], SONG); p.volume = MUSIC_VOLUME; resultPlayers.set(kind, p); }
     resultOn = true;
     p.seekTo(0).catch(() => {});
     p.volume = MUSIC_VOLUME;
