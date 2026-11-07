@@ -154,6 +154,11 @@ export async function declineChallenge(id: string): Promise<void> { await call('
 /** Take back a challenge that hasn't been accepted yet. */
 export async function cancelChallenge(id: string): Promise<void> { await call('cancel_challenge', { p_challenge: id }); void social.refresh(); }
 
+/** Development only: clear your challenges with test friends (real players are never touched). */
+export async function devResetTestChallenges(): Promise<void> {
+  try { await call('dev_reset_test_challenges'); } catch { /* not available: ignore */ }
+}
+
 // ── Notifications ──
 export const myNotifications = () => call<NotificationRow[]>('my_notifications');
 export async function markNotificationsRead(ids?: number[]): Promise<void> {

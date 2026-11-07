@@ -4,7 +4,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { accounts } from '@/lib/account';
 import { ads } from '@/lib/ads';
-import { social } from '@/lib/challenges';
+import { devResetTestChallenges, social } from '@/lib/challenges';
 import { onPushOpened, registerForPush } from '@/lib/push';
 import { purchases } from '@/lib/purchases';
 import { engine, HUMAN_ID } from '@/lib/engine';
@@ -50,7 +50,8 @@ export function LastWordApp() {
   useEffect(() => {
     social.reset();
     nav.reset();
-    if (id) void social.refresh();
+    // In development, each reload clears challenges with test friends (see dev_reset_test_challenges).
+    if (id) void (__DEV__ ? devResetTestChallenges().finally(() => social.refresh()) : social.refresh());
   }, [id]);
   const onboarded = !!id && !auth.onboarding;
   useEffect(() => { if (onboarded && id) void registerForPush(id); }, [onboarded, id]);
