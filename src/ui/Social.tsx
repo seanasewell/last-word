@@ -111,9 +111,6 @@ export async function shareFriendInvite(): Promise<string | null> {
   } catch (e) { return friendlyError(e, "Couldn't create an invite link. Try again."); }
 }
 
-const challengeMessage = (token: string) =>
-  `I challenge you to a 1v1 in Last Word ⚔️ Same word, 60 seconds. Think you can beat me?\n${inviteUrl(token)}`;
-
 // ── Friends ────────────────────────────────────────────────────────────────
 export function FriendsScreen() {
   const list = useLoad(myFriends, []);
@@ -361,13 +358,6 @@ export async function sendChallenge(to: { id: string; name: string }, rematchOf?
   nav.push({ name: 'challenge', id: r.id });
 }
 
-/** An open challenge anyone with the link can take. Opens the share sheet. */
-async function sendChallengeLink(): Promise<void> {
-  const r = await createChallenge(null);
-  nav.push({ name: 'challenge', id: r.id });
-  await shareText(challengeMessage(r.token));
-}
-
 /** Play your round of an accepted challenge (the word is revealed and the timer starts only now). */
 export function playChallenge(challengeId: string, opponentName: string) {
   nav.reset();
@@ -511,7 +501,7 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
       )}
 
       <ChallengePicker open={picking} onClose={() => setPicking(false)}
-        onPick={(to) => { setPicking(false); void action.run(() => (to ? sendChallenge(to) : sendChallengeLink())); }} />
+        onPick={(to) => { setPicking(false); void action.run(() => sendChallenge(to)); }} />
     </View>
   );
 }
@@ -593,7 +583,6 @@ export function ChallengeScreen({ id }: { id: string }) {
             {d.your_turn && <Button title="Play now" onPress={() => playChallenge(d.id, other.name)} />}
             {d.role === 'challenger' && d.status === 'pending' && (
               <>
-                {d.invite_token && !d.other && <Button title="Share invite link" onPress={() => void shareText(challengeMessage(d.invite_token!))} />}
                 <Button title="Cancel challenge" variant="ghost" disabled={busy} onPress={() => void act(() => cancelChallenge(d.id))} />
               </>
             )}
@@ -738,8 +727,7 @@ export function ChallengeCta() {
         onPick={(to) => {
           setPicking(false);
           void action.run(async () => {
-            const r = await createChallenge(to?.id ?? null);
-            if (!to) await shareText(challengeMessage(r.token));
+            const r = await createChallenge(to.id);
             engine.goMenu();
             nav.reset([{ name: 'challenges' }, { name: 'challenge', id: r.id }]);
           });
@@ -748,34 +736,49 @@ export function ChallengeCta() {
   );
 }
 
-/** Choose a friend, or share a link anyone can accept. */
-export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (to: { id: string; name: string } | null) => void }) {
+/**
+ * Choose a friend to challenge (searchable). Only existing players can be challenged, so
+ * the other option invites people to the app; once they've joined, they can be challenged.
+ */
+export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (to: { id: string; name: string }) => void }) {
   const [friends, setFriends] = useState<FriendRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [q, setQ] = useState('');
   useEffect(() => {
     if (!open) return;
     let live = true;
     myFriends().then((f) => { if (live) setFriends(f.filter((x) => x.relation === 'friends')); }).catch((e) => { if (live) setErr(friendlyError(e)); });
     return () => { live = false; };
   }, [open]);
+  const query = q.trim().toLowerCase();
+  const shown = friends && query ? friends.filter((f) => f.name.toLowerCase().includes(query)) : friends;
+  const invite = async () => { const e = await shareFriendInvite(); if (e) setErr(e); };
   return (
-    <Sheet open={open} onClose={onClose} title="Challenge a friend">
+    <Sheet open={open} onClose={() => { setQ(''); onClose(); }} title="Challenge a friend">
       <Text style={[s.body, { fontSize: 14, marginBottom: 12 }]}>They have 72 hours to accept. Nobody plays until they do.</Text>
-      <Button title="Share a challenge link" variant="ghost" onPress={() => onPick(null)} />
-      <Text style={[sub, { textAlign: 'center', marginTop: 6 }]}>Anyone can accept it, even if they don’t have Last Word yet.</Text>
+      {friends && friends.length > 0 && (
+        <TextField value={q} onChangeText={setQ} placeholder="Search friends" autoCorrect={false} autoCapitalize="none"
+          returnKeyType="search" accessibilityLabel="Search friends" style={{ height: 44, borderRadius: 12, fontSize: 16 }} />
+      )}
       {err && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral }}>{err}</Text>}
       {!friends && !err && <Loading />}
-      {friends && friends.length === 0 && <Text style={[s.body, { marginTop: 14, textAlign: 'center' }]}>Add friends from Profile → Friends to challenge them directly.</Text>}
-      {friends && friends.length > 0 && (
-        <View style={{ gap: 6, marginTop: 14 }}>
-          {friends.map((f) => (
-            <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }}
-              subtitle={f.wins + f.losses + f.draws ? `You ${recordText(f)}` : undefined}
-              onPress={() => onPick({ id: f.user_id, name: f.name })}
-              right={<Text style={{ fontFamily: F.bodyBold, color: C.primary }}>Challenge</Text>} />
-          ))}
-        </View>
+      {friends && friends.length === 0 && <Text style={[s.body, { marginTop: 4, textAlign: 'center' }]}>No friends yet. Invite friends to Last Word, then challenge them here.</Text>}
+      {shown && friends && friends.length > 0 && (
+        shown.length === 0 ? (
+          <Text style={[sub, { marginTop: 14, textAlign: 'center', fontSize: 13 }]}>{`No friends match "${q.trim()}".`}</Text>
+        ) : (
+          <View style={{ gap: 6, marginTop: 12 }}>
+            {shown.map((f) => (
+              <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }}
+                subtitle={f.wins + f.losses + f.draws ? `You ${recordText(f)}` : undefined}
+                onPress={() => { setQ(''); onPick({ id: f.user_id, name: f.name }); }}
+                right={<Text style={{ fontFamily: F.bodyBold, color: C.primary }}>Challenge</Text>} />
+            ))}
+          </View>
+        )
       )}
+      <Button title="Invite friends to challenge" variant="ghost" style={{ marginTop: 16 }} onPress={() => void invite()} />
+      <Text style={[sub, { textAlign: 'center', marginTop: 6 }]}>Friends need Last Word to play. Once they join, challenge them here.</Text>
     </Sheet>
   );
 }

@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import { Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, { Easing, SlideInDown, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -120,6 +120,18 @@ export function Tile({ ch, size, gold = false, delay = 0, animate = true }: { ch
 }
 
 /** The Last word logo: letter tiles. */
+/** Width kept free beside the header logo (the Play tab's bell, the lobby's Leave button). */
+export const HEADER_SIDE = 52;
+/** The tile logo at its header size: the same on the Play tab and in the match lobby. */
+export function HeaderLogo({ animate = true }: { animate?: boolean }) {
+  const { width } = useWindowDimensions();
+  // About 80% of the row beside the side control, left-aligned.
+  const avail = (Math.min(width, 480) - 24 - HEADER_SIDE) * 0.8;
+  const gap = Math.max(2, Math.round((avail / 8.91) * 0.13));
+  const size = Math.floor(((avail - 7 * gap) / 8) * 100) / 100;
+  return <TileLogo size={size} animate={animate} />;
+}
+
 export function TileLogo({ size = 36, animate = true }: { size?: number; animate?: boolean }) {
   let i = 0;
   return (

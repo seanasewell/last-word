@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, BackHandler, Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, AppState, BackHandler, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,7 +8,7 @@ import { social, useSocial } from '@/lib/challenges';
 import { engine, type GameState } from '@/lib/engine';
 import { fetchModeLeaderboard, type Leaderboard, type RankEntry, type RankMode, type Scope } from '@/lib/ranks';
 import { countryByCode } from '@/lib/regions';
-import { Avatar, Card, FadeUp, ordinal, s, Screen, TileLogo, useNow } from './kit';
+import { Avatar, Card, FadeUp, HEADER_SIDE, HeaderLogo, ordinal, s, Screen, useNow } from './kit';
 import { nav, useNav, type Route } from './nav';
 import { DailyChallenges, LevelCard, RewardsTab, StreakCard, SweepBorder } from './Progress';
 import { MatchFaces } from './MatchFaces';
@@ -58,17 +58,8 @@ const MATCH_FACES = [
   require('@/assets/avatars/bot5.jpg'),
 ];
 
-/** The tile logo sized to fill the header row next to the notification bell. */
 const BELL_SIZE = 40;
-const BELL_GAP = 12;
-function HeaderLogo() {
-  const { width } = useWindowDimensions();
-  // About 80% of the row, left-aligned, with the bell on the right.
-  const avail = (Math.min(width, 480) - 24 - BELL_SIZE - BELL_GAP) * 0.8;
-  const gap = Math.max(2, Math.round((avail / 8.91) * 0.13));
-  const size = Math.floor(((avail - 7 * gap) / 8) * 100) / 100;
-  return <TileLogo size={size} />;
-}
+const BELL_GAP = HEADER_SIDE - BELL_SIZE;
 
 /** The elimination card's see-through blue as it looks over the screen's background, for the avatar rings. */
 const MATCH_CARD_BLUE = '#11274D';

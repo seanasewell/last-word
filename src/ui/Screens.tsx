@@ -6,7 +6,7 @@ import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDe
 
 import { engine, HUMAN_ID, TOTAL_ROUNDS, type GameState } from '@/lib/engine';
 import type { Player } from '@/lib/players';
-import { Avatar, Button, Card, FadeUp, ordinal, s, Screen, Stat, Tile, useAnimatedNumber, useCountdown, useNow, BotBadge, isBot } from './kit';
+import { Avatar, Button, Card, FadeUp, HeaderLogo, ordinal, s, Screen, Stat, useAnimatedNumber, useCountdown, useNow, BotBadge, isBot } from './kit';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { ProgressHint, XpChip, afterGame, usePendingXp } from './Progress';
 import { nav } from './nav';
@@ -148,9 +148,7 @@ export function Lobby({ s: g }: { s: GameState }) {
     <Screen>
       <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 20 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            <View style={{ flexDirection: 'row', gap: 2 }}>{'LASTWORD'.split('').map((c, i) => <Tile key={i} ch={c} size={18} animate={false} />)}</View>
-          </View>
+          <HeaderLogo animate={false} />
           <Pressable onPress={() => engine.goMenu()} hitSlop={10}><Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: w(0.72) }}>Leave</Text></Pressable>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 28 }}>
