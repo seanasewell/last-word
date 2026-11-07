@@ -17,7 +17,7 @@ import { DailyChallenges, LevelCard, LevelingGuide, RewardsTab, SweepBorder } fr
 import { MatchFaces } from './MatchFaces';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { PROVIDER_NAME, SaveProgressCard, SaveProgressNudge } from './SignIn';
-import { onSoundChange, setSoundEnabled, soundEnabled } from './sound';
+import { musicEnabled, onSoundChange, setMusicEnabled, setSoundEnabled, soundEnabled } from './sound';
 import { C, F, w } from './theme';
 
 type Tab = 'play' | 'ranks' | 'rewards' | 'profile';
@@ -306,7 +306,8 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
   const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'delete' | 'signout' | 'dev' | 'blocked' | 'scoring' | 'leveling'>(null);
   const [photoErr, setPhotoErr] = useState<string | null>(null);
   const [sound, setSound] = useState(soundEnabled);
-  useEffect(() => onSoundChange(() => setSound(soundEnabled())), []);
+  const [musicOn, setMusicOn] = useState(musicEnabled);
+  useEffect(() => onSoundChange(() => { setSound(soundEnabled()); setMusicOn(musicEnabled()); }), []);
   const country = countryByCode(account.country);
   const err = nameError(name);
   const dirty = name.trim() !== account.name;
@@ -396,6 +397,10 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         <View style={[row, { paddingVertical: 10 }]}>
           <MenuLabel emoji="🔊" text="Sound effects" />
           <Toggle on={sound} onChange={setSoundEnabled} label="Sound effects" />
+        </View>
+        <View style={[row, { paddingVertical: 10 }]}>
+          <MenuLabel emoji="🎵" text="Music" />
+          <Toggle on={musicOn} onChange={setMusicEnabled} label="Music" />
         </View>
         <Pressable onPress={() => setSheet('blocked')} style={[row, { borderBottomWidth: 0 }]}>
           <MenuLabel emoji="🚫" text="Blocked players" />

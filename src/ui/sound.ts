@@ -3,6 +3,7 @@
 // sounds), played with expo-audio. Respects the iPhone silent switch and
 // mixes with music the player already has on.
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { AppState } from 'react-native';
 
 import { kv } from '@/lib/kv';
 
@@ -45,6 +46,71 @@ export function onSoundChange(fn: () => void) {
 export function initSound() {
   setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {});
   (Object.keys(SOURCES) as Name[]).forEach((n) => { for (let i = 0; i < (POOLED[n] ?? 1); i++) player(n, i); });
+  ensureMusic();
+}
+
+// ── Background music ──
+// "Mechanical Activation" (assets/sounds/music.m4a) plays quietly during games so sound
+// effects sit on top: it starts when a round begins, keeps going between rounds and on
+// the results, and fades out back on the menu. Its own setting; paused in the background.
+const MUSIC_KEY = 'lw.music';
+const MUSIC_VOLUME = 0.12;
+let music: AudioPlayer | null = null;
+let musicHooked = false;
+let inGame = false;
+let fade: ReturnType<typeof setInterval> | null = null;
+
+export const musicEnabled = () => kv.get(MUSIC_KEY) !== 'off';
+export function setMusicEnabled(on: boolean) {
+  kv.set(MUSIC_KEY, on ? 'on' : 'off');
+  listeners.forEach((l) => l());
+  if (on && inGame) resumeMusic(); else if (!on) music?.pause();
+}
+
+function ensureMusic(): AudioPlayer | null {
+  try {
+    if (!music) {
+      music = createAudioPlayer(require('@/assets/sounds/music.m4a'));
+      music.loop = true;
+      music.volume = MUSIC_VOLUME;
+    }
+    if (!musicHooked) {
+      musicHooked = true;
+      AppState.addEventListener('change', (s) => {
+        if (s === 'active') { if (inGame) resumeMusic(); } else music?.pause();
+      });
+    }
+    return music;
+  } catch { return null; }
+}
+
+function resumeMusic() {
+  const m = ensureMusic();
+  if (!m || !musicEnabled()) return;
+  if (fade) { clearInterval(fade); fade = null; }
+  m.volume = MUSIC_VOLUME;
+  m.play();
+}
+
+/** A game just started: play the music from the top. */
+export function startGameMusic() {
+  inGame = true;
+  const m = ensureMusic();
+  if (!m || !musicEnabled()) return;
+  m.seekTo(0).then(resumeMusic, resumeMusic);
+}
+
+/** Back on the menu: fade the music out over about a second. */
+export function stopGameMusic() {
+  inGame = false;
+  const m = music;
+  if (!m || fade) return;
+  let v = m.volume;
+  fade = setInterval(() => {
+    v -= MUSIC_VOLUME / 10;
+    if (v <= 0) { m.pause(); m.volume = MUSIC_VOLUME; if (fade) clearInterval(fade); fade = null; }
+    else m.volume = v;
+  }, 100);
 }
 
 /** Sounds that can fire in quick succession get a few players each, so a new play never cuts off or races the last. */

@@ -9,6 +9,7 @@ import { AuthFlow, Onboarding } from './Auth';
 import { GameScreen } from './GameScreen';
 import { Home } from './Home';
 import { useAuth, useGame } from './kit';
+import { startGameMusic, stopGameMusic } from './sound';
 import { CelebrationHost } from './Progress';
 import { EliminationScreen, FinalResults, Lobby, SoloCountdown, SoloResults } from './Screens';
 
@@ -46,6 +47,11 @@ export function LastWordApp() {
 
   // Back on the home screen: pick up any XP the server awarded.
   useEffect(() => { if (g.phase === 'menu') void progress.refresh(); }, [g.phase]);
+
+  // Music: starts when a game begins, keeps going through rounds and results, fades out on the menu.
+  const gameKey = g.phase === 'sp-playing' || g.phase === 'round' ? g.matchId : null;
+  useEffect(() => { if (gameKey) startGameMusic(); }, [gameKey]);
+  useEffect(() => { if (g.phase === 'menu' || g.phase === 'lobby' || g.phase === 'sp-countdown') stopGameMusic(); }, [g.phase]);
 
   let key: string;
   let screen: React.ReactNode;
