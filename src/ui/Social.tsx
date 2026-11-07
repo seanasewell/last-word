@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, Share, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
 import {
-  acceptFriendInvite, ago, challengeDetail, claimChallenge, createChallenge, createFriendInvite, declineChallenge,
+  acceptChallenge, acceptFriendInvite, ago, cancelChallenge, challengeDetail, claimChallenge, createChallenge, createFriendInvite, declineChallenge,
   friendlyError, INVITE_MESSAGE, inviteUrl, markNotificationsRead, myChallenges, myFriends, myNotifications,
   personAvatar, playerProfile, recordText, removeFriend, resolveInvite, respondFriendRequest, searchPlayers,
   sendFriendRequest, social, timeLeft, useSocial,
@@ -256,23 +256,12 @@ function PlayerRow({ p, subtitle, right, onPress }: { p: Person; subtitle?: stri
 
 function FriendRowView({ f }: { f: FriendRow }) {
   const played = f.wins + f.losses + f.draws;
+  const action = useChallengeAction();
   return (
     <PlayerRow p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }}
-      subtitle={played ? `You ${recordText(f)}` : 'No 1v1s yet'}
-      right={<SmallButton title="Challenge" onPress={() => startChallenge({ id: f.user_id, name: f.name })} />} />
+      subtitle={action.note ?? (played ? `You ${recordText(f)}` : 'No 1v1s yet')}
+      right={<SmallButton title={action.busy ? 'Sending…' : 'Challenge'} disabled={action.busy} onPress={() => void action.run(() => sendChallenge({ id: f.user_id, name: f.name }))} />} />
   );
-}
-
-/** Play a 60-second round, then send it to this player. */
-export function startChallenge(opponent: { id: string; name: string } | null, rematchOf?: string | null) {
-  nav.reset();
-  engine.startSingle({ kind: 'new', opponent, rematchOf: rematchOf ?? null });
-}
-
-/** Play someone's challenge (the word is revealed and the timer starts only now). */
-export function playChallenge(challengeId: string, opponentName: string) {
-  nav.reset();
-  engine.startSingle({ kind: 'reply', challengeId, opponentName });
 }
 
 // ── Player profile ─────────────────────────────────────────────────────────
@@ -282,6 +271,7 @@ export function PlayerScreen({ id }: { id: string }) {
   const [note, setNote] = useState<string | null>(null);
   const [acting, setActing] = useState<PlayerRef | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const challenge = useChallengeAction();
   if (error) return <Empty emoji="🙈" title="Player unavailable" body="This player can't be shown right now." />;
   if (!p) return <Loading />;
 
@@ -314,10 +304,10 @@ export function PlayerScreen({ id }: { id: string }) {
               <Button title="Add friend" variant="ghost" disabled={busy} onPress={() => void act(() => sendFriendRequest(p.id))} />
             )}
           </View>
-          <View style={{ flex: 1 }}><Button title="Challenge ⚔️" onPress={() => startChallenge({ id: p.id, name: p.name })} /></View>
+          <View style={{ flex: 1 }}><Button title={challenge.busy ? 'Sending…' : 'Challenge ⚔️'} disabled={challenge.busy} onPress={() => void challenge.run(() => sendChallenge({ id: p.id, name: p.name }))} /></View>
         </View>
       )}
-      {note && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{note}</Text>}
+      {(note ?? challenge.note) && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{note ?? challenge.note}</Text>}
       {p.blocked && <Text style={[s.body, { textAlign: 'center', marginTop: 14 }]}>{"You've blocked this player. Unblock them in Settings → Blocked players."}</Text>}
 
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 20 }}>
@@ -362,14 +352,50 @@ export function PlayerScreen({ id }: { id: string }) {
 }
 
 // ── Challenges ─────────────────────────────────────────────────────────────
+// A challenge starts as an invitation. Nobody sees the word or can play until the
+// opponent accepts; then both play the same word once each, in any order.
+
+/** Send a challenge and open it. Throws a server message (e.g. an open one already exists). */
+export async function sendChallenge(to: { id: string; name: string }, rematchOf?: string | null): Promise<void> {
+  const r = await createChallenge(to.id, rematchOf ?? null);
+  nav.push({ name: 'challenge', id: r.id });
+}
+
+/** An open challenge anyone with the link can take. Opens the share sheet. */
+async function sendChallengeLink(): Promise<void> {
+  const r = await createChallenge(null);
+  nav.push({ name: 'challenge', id: r.id });
+  await shareText(challengeMessage(r.token));
+}
+
+/** Play your round of an accepted challenge (the word is revealed and the timer starts only now). */
+export function playChallenge(challengeId: string, opponentName: string) {
+  nav.reset();
+  engine.startSingle({ kind: 'play', challengeId, opponentName });
+}
+
+/** A button that sends a challenge, with its own busy state and error line. */
+function useChallengeAction() {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const run = useCallback(async (fn: () => Promise<void>) => {
+    setBusy(true); setNote(null);
+    try { await fn(); } catch (e) { setNote(friendlyError(e, "Couldn't send the challenge. Try again.")); } finally { setBusy(false); }
+  }, []);
+  return { busy, note, run };
+}
+
 function statusLabel(c: ChallengeRow): string {
-  if (c.status === 'completed') return c.outcome === 'win' ? 'You won' : c.outcome === 'loss' ? 'You lost' : 'Draw';
+  if (c.status === 'completed') {
+    const r = c.outcome === 'win' ? 'You won' : c.outcome === 'loss' ? 'You lost' : 'Draw';
+    return c.forfeit ? `${r} · no-show` : r;
+  }
   if (c.status === 'expired') return 'Expired';
   if (c.status === 'declined') return 'Declined';
-  if (c.your_turn) return 'Your turn';
-  if (c.role === 'challenger' && !c.other) return 'Waiting for someone to accept your link';
-  if (c.status === 'in_progress' && c.role === 'challenger') return 'They’re playing now';
-  if (c.role === 'opponent') return 'Waiting for results';
+  if (c.status === 'cancelled') return 'Cancelled';
+  if (c.needs_response) return 'Wants a 1v1';
+  if (c.status === 'pending') return c.other ? 'Waiting for them to accept' : 'Waiting for someone to accept your link';
+  if (c.your_turn) return c.they_played ? 'Your turn · they’ve played' : 'Your turn';
   return 'Waiting for them to play';
 }
 
@@ -378,19 +404,27 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
   const list = useLoad(myChallenges, []);
   const counts = useSocial();
   const now = useNow(true, 30_000);
+  const [picking, setPicking] = useState(false);
+  const action = useChallengeAction();
   const [note, setNote] = useState<string | null>(null);
   useEffect(() => { void social.refresh(); }, []);
 
   const all = list.data ?? [];
-  const isActive = (c: ChallengeRow) => c.status === 'pending' || c.status === 'in_progress';
-  const incoming = all.filter((c) => isActive(c) && c.your_turn);
-  const outgoing = all.filter((c) => isActive(c) && !c.your_turn);
+  const isActive = (c: ChallengeRow) => c.status === 'pending' || c.status === 'accepted';
+  const invites = all.filter((c) => isActive(c) && c.needs_response);
+  const ready = all.filter((c) => isActive(c) && c.your_turn);
+  const waiting = all.filter((c) => isActive(c) && !c.needs_response && !c.your_turn);
   const history = all.filter((c) => !isActive(c));
-  const decline = async (c: ChallengeRow) => {
-    try { await declineChallenge(c.id); list.reload(); } catch (e) { setNote(friendlyError(e)); }
+  const respond = async (c: ChallengeRow, accept: boolean) => {
+    setNote(null);
+    try {
+      if (accept) { await acceptChallenge(c.id); nav.push({ name: 'challenge', id: c.id }); } else await declineChallenge(c.id);
+      list.reload();
+    } catch (e) { setNote(friendlyError(e)); list.reload(); }
   };
   const record = counts?.record ?? { wins: 0, losses: 0, draws: 0 };
   const played = record.wins + record.losses + record.draws;
+  const activeCount = invites.length + ready.length + waiting.length;
 
   return (
     <View>
@@ -399,15 +433,16 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
         <RecordStats r={record} />
         {played > 0 && <Text style={[sub, { textAlign: 'center', marginTop: 8 }]}>{played} {played === 1 ? 'match' : 'matches'} · {Math.round((record.wins / played) * 100)}% win rate</Text>}
       </Card>
-      <Button title="New challenge ⚔️" style={{ marginTop: 12 }} onPress={() => startChallenge(null)} />
-      <Text style={[sub, { textAlign: 'center', marginTop: 6 }]}>Play 60 seconds, then choose who to challenge.</Text>
+      <Button title={action.busy ? 'Sending…' : 'New challenge ⚔️'} disabled={action.busy} style={{ marginTop: 12 }} onPress={() => setPicking(true)} />
+      <Text style={[sub, { textAlign: 'center', marginTop: 6 }]}>Pick who to challenge. Once they accept, you both play the same word.</Text>
+      {action.note && <Text style={{ marginTop: 8, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{action.note}</Text>}
 
       <View style={{ flexDirection: 'row', gap: 4, padding: 4, marginTop: 18, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
         {(['active', 'history'] as const).map((t) => (
           <Pressable key={t} onPress={() => setTab(t)} accessibilityRole="tab" accessibilityState={{ selected: tab === t }}
             style={{ flex: 1, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: tab === t ? C.primary : 'transparent' }}>
             <Text style={{ fontFamily: F.bodySemi, fontSize: 13, color: tab === t ? C.white : w(0.72) }}>
-              {t === 'active' ? `Active${incoming.length + outgoing.length ? ` · ${incoming.length + outgoing.length}` : ''}` : 'History'}
+              {t === 'active' ? `Active${activeCount ? ` · ${activeCount}` : ''}` : 'History'}
             </Text>
           </Pressable>
         ))}
@@ -417,30 +452,47 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
       {!list.data && !list.error && <Loading />}
 
       {list.data && tab === 'active' && (
-        <>
-          <Eyebrow right={incoming.length ? `${incoming.length}` : undefined}>Your turn</Eyebrow>
-          {incoming.length === 0 ? <Text style={[sub, { fontSize: 13 }]}>No challenges waiting for you.</Text> : (
-            <View style={{ gap: 6 }}>
-              {incoming.map((c) => (
-                <ChallengeRowView key={c.id} c={c} now={now}
-                  right={(
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      {c.status === 'pending' && <SmallButton title="Decline" variant="ghost" onPress={() => void decline(c)} />}
-                      <SmallButton title={c.status === 'in_progress' ? 'Resume' : 'Play now'} onPress={() => playChallenge(c.id, c.other?.name ?? 'Player')} />
-                    </View>
-                  )} />
-              ))}
-            </View>
-          )}
-          <Eyebrow>Waiting on them</Eyebrow>
-          {outgoing.length === 0 ? (
-            <Empty emoji="⚔️" title="No active challenges" body="Start a new challenge, or challenge a friend from their profile." />
-          ) : (
-            <View style={{ gap: 6 }}>
-              {outgoing.map((c) => <ChallengeRowView key={c.id} c={c} now={now} right={<SmallButton title="View" variant="ghost" onPress={() => nav.push({ name: 'challenge', id: c.id })} />} />)}
-            </View>
-          )}
-        </>
+        activeCount === 0 ? (
+          <View style={{ marginTop: 12 }}><Empty emoji="⚔️" title="No active challenges" body="Challenge a friend. The round unlocks once they accept." /></View>
+        ) : (
+          <>
+            {invites.length > 0 && (
+              <>
+                <Eyebrow right={`${invites.length}`}>Challenges for you</Eyebrow>
+                <View style={{ gap: 6 }}>
+                  {invites.map((c) => (
+                    <ChallengeRowView key={c.id} c={c} now={now}
+                      right={(
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          <SmallButton title="Decline" variant="ghost" onPress={() => void respond(c, false)} />
+                          <SmallButton title="Accept" onPress={() => void respond(c, true)} />
+                        </View>
+                      )} />
+                  ))}
+                </View>
+              </>
+            )}
+            {ready.length > 0 && (
+              <>
+                <Eyebrow right={`${ready.length}`}>Ready to play</Eyebrow>
+                <View style={{ gap: 6 }}>
+                  {ready.map((c) => (
+                    <ChallengeRowView key={c.id} c={c} now={now}
+                      right={<SmallButton title="Play" onPress={() => nav.push({ name: 'challenge', id: c.id })} />} />
+                  ))}
+                </View>
+              </>
+            )}
+            {waiting.length > 0 && (
+              <>
+                <Eyebrow>Waiting on them</Eyebrow>
+                <View style={{ gap: 6 }}>
+                  {waiting.map((c) => <ChallengeRowView key={c.id} c={c} now={now} />)}
+                </View>
+              </>
+            )}
+          </>
+        )
       )}
 
       {list.data && tab === 'history' && (
@@ -450,11 +502,16 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
           <View style={{ gap: 6, marginTop: 12 }}>
             {history.map((c) => (
               <ChallengeRowView key={c.id} c={c} now={now}
-                right={c.status === 'completed' && c.other?.id ? <SmallButton title="Rematch" onPress={() => startChallenge({ id: c.other!.id!, name: c.other!.name }, c.id)} /> : undefined} />
+                right={c.status === 'completed' && c.other?.id
+                  ? <SmallButton title="Rematch" disabled={action.busy} onPress={() => void action.run(() => sendChallenge({ id: c.other!.id!, name: c.other!.name }, c.id))} />
+                  : undefined} />
             ))}
           </View>
         )
       )}
+
+      <ChallengePicker open={picking} onClose={() => setPicking(false)}
+        onPick={(to) => { setPicking(false); void action.run(() => (to ? sendChallenge(to) : sendChallengeLink())); }} />
     </View>
   );
 }
@@ -462,11 +519,11 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
 function ChallengeRowView({ c, now, right }: { c: ChallengeRow; now: number; right?: React.ReactNode }) {
   const other: Person = c.other ?? { id: null, name: 'Anyone with your link', photo_url: null };
   const done = c.status === 'completed';
-  const color = done ? (c.outcome === 'win' ? C.mint : c.outcome === 'loss' ? C.coral : C.amber) : c.your_turn ? C.amber : w(0.65);
+  const color = done ? (c.outcome === 'win' ? C.mint : c.outcome === 'loss' ? C.coral : C.amber)
+    : c.needs_response || c.your_turn ? C.amber : w(0.65);
   const when = done
-    ? `${c.my_score} – ${c.their_score} · ${new Date(c.completed_at ?? c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-    : c.status === 'pending' ? timeLeft(c.expires_at, now)
-    : c.status === 'in_progress' ? 'In progress'
+    ? `${c.my_score ?? '–'} – ${c.their_score ?? '–'} · ${new Date(c.completed_at ?? c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+    : c.status === 'pending' || c.status === 'accepted' ? timeLeft(c.expires_at, now)
     : new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return (
     <Pressable onPress={() => nav.push({ name: 'challenge', id: c.id })}
@@ -481,16 +538,37 @@ function ChallengeRowView({ c, now, right }: { c: ChallengeRow; now: number; rig
   );
 }
 
-/** One challenge: waiting, your turn, or the full results with both players' words. */
+/** One challenge: the invitation, the ready-to-play state, waiting, or the full results. */
 export function ChallengeScreen({ id }: { id: string }) {
   const { data: d, error, reload } = useLoad<ChallengeDetail>(() => challengeDetail(id), [id]);
   const now = useNow(true, 30_000);
+  const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const rematch = useChallengeAction();
   if (error) return <ErrorText text={error} onRetry={reload} />;
   if (!d) return <Loading />;
   const other: Person = d.other ?? { id: null, name: 'Anyone with your link', photo_url: null };
   const done = d.status === 'completed';
-  const yourTurn = d.role === 'opponent' && (d.status === 'pending' || d.status === 'in_progress') && d.my_score == null;
+  const open = d.status === 'pending' || d.status === 'accepted';
+  const act = async (fn: () => Promise<void>) => {
+    setBusy(true); setNote(null);
+    try { await fn(); } catch (e) { setNote(friendlyError(e)); } finally { setBusy(false); reload(); }
+  };
+
+  let title: string; let body: string;
+  if (d.status === 'expired') { title = 'This challenge expired'; body = 'No win or loss for either player.'; }
+  else if (d.status === 'declined') { title = d.role === 'challenger' ? `${other.name} declined` : 'You declined'; body = 'No win or loss for either player.'; }
+  else if (d.status === 'cancelled') { title = 'Challenge cancelled'; body = 'No win or loss for either player.'; }
+  else if (d.needs_response) { title = `${other.name} challenged you`; body = 'Accept to unlock the round. You both get the same word, 60 seconds and one try.'; }
+  else if (d.status === 'pending') {
+    title = d.other ? `Waiting for ${other.name} to accept` : 'Waiting for someone to accept';
+    body = d.other ? 'The round unlocks for both of you once they accept.' : 'Share your link. The first person to accept plays you.';
+  } else if (d.your_turn) {
+    title = 'Your round is ready';
+    body = d.they_played
+      ? `${other.name} has played. Their score stays hidden until you finish.`
+      : 'Same word for both of you. 60 seconds, one try. Leaving early ends your round.';
+  } else { title = `Waiting for ${other.name} to play`; body = `Your score: ${d.my_score ?? 0}. They can't see it until they play.`; }
 
   return (
     <View>
@@ -501,30 +579,30 @@ export function ChallengeScreen({ id }: { id: string }) {
             <Text style={{ fontFamily: F.display, fontSize: 20, color: w(0.6) }}>vs</Text>
             <PersonAvatar p={other} size={56} />
           </View>
-          <Text style={{ fontFamily: F.displayBold, fontSize: 18, color: C.white, marginTop: 12, textAlign: 'center' }}>
-            {d.status === 'expired' ? 'This challenge expired' : d.status === 'declined' ? `${other.name} declined`
-              : yourTurn ? `${other.name} challenged you` : d.role === 'challenger' ? (d.other ? `Waiting for ${other.name}` : 'Waiting for someone to accept') : 'Waiting for results'}
-          </Text>
-          <Text style={[s.body, { textAlign: 'center', marginTop: 4, fontSize: 14 }]}>
-            {d.status === 'expired' || d.status === 'declined' ? 'No win or loss for either player.'
-              : yourTurn ? 'Same word, 60 seconds. The word is revealed when you start, and you only get one try.'
-              : d.role === 'challenger' ? `Your score: ${d.my_score}. They can't see it until they play.` : 'Results will appear here.'}
-          </Text>
-          {(d.status === 'pending') && <Text style={[sub, { marginTop: 8 }]}>{timeLeft(d.expires_at, now)}</Text>}
-          {yourTurn && (
-            <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 16 }}>
-              <Button title={d.status === 'in_progress' ? 'Resume' : 'Play now'} onPress={() => playChallenge(d.id, other.name)} />
-              {d.status === 'pending' && <Button title="Decline" variant="ghost" onPress={() => { void declineChallenge(d.id).then(reload).catch((e) => setNote(friendlyError(e))); }} />}
-            </View>
-          )}
-          {d.role === 'challenger' && d.status === 'pending' && d.invite_token && (
-            <Button title={d.other ? 'Share challenge link' : 'Share invite link'} variant="ghost" style={{ alignSelf: 'stretch', marginTop: 16 }} onPress={() => void shareText(challengeMessage(d.invite_token!))} />
-          )}
-          {note && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral }}>{note}</Text>}
+          <Text style={{ fontFamily: F.displayBold, fontSize: 18, color: C.white, marginTop: 12, textAlign: 'center' }}>{title}</Text>
+          <Text style={[s.body, { textAlign: 'center', marginTop: 4, fontSize: 14 }]}>{body}</Text>
+          {open && <Text style={[sub, { marginTop: 8 }]}>{timeLeft(d.expires_at, now)}</Text>}
+
+          <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 16 }}>
+            {d.needs_response && (
+              <>
+                <Button title={busy ? 'Accepting…' : 'Accept challenge'} disabled={busy} onPress={() => void act(() => acceptChallenge(d.id))} />
+                <Button title="Decline" variant="ghost" disabled={busy} onPress={() => void act(() => declineChallenge(d.id))} />
+              </>
+            )}
+            {d.your_turn && <Button title="Play now" onPress={() => playChallenge(d.id, other.name)} />}
+            {d.role === 'challenger' && d.status === 'pending' && (
+              <>
+                {d.invite_token && !d.other && <Button title="Share invite link" onPress={() => void shareText(challengeMessage(d.invite_token!))} />}
+                <Button title="Cancel challenge" variant="ghost" disabled={busy} onPress={() => void act(() => cancelChallenge(d.id))} />
+              </>
+            )}
+          </View>
+          {note && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{note}</Text>}
         </Card>
       )}
 
-      {d.source && (done || d.role === 'challenger') && <Text style={[sub, { textAlign: 'center', marginTop: 12 }]}>Word: <Text style={{ fontFamily: F.bodyBold, color: C.white }}>{d.source}</Text></Text>}
+      {d.source && <Text style={[sub, { textAlign: 'center', marginTop: 12 }]}>Word: <Text style={{ fontFamily: F.bodyBold, color: C.white }}>{d.source}</Text></Text>}
 
       {done && <WordCompare mine={d.my_words} theirs={d.their_words ?? []} otherName={other.name} />}
       {!done && d.my_words.length > 0 && (
@@ -534,9 +612,13 @@ export function ChallengeScreen({ id }: { id: string }) {
         </>
       )}
 
-      {done && (
+      {(done || !open) && (
         <View style={{ gap: 10, marginTop: 24 }}>
-          {d.other?.id && <Button title="Rematch" onPress={() => startChallenge({ id: d.other!.id!, name: d.other!.name }, d.id)} />}
+          {d.other?.id && (
+            <Button title={rematch.busy ? 'Sending…' : done ? 'Rematch' : 'Challenge again'} disabled={rematch.busy}
+              onPress={() => void rematch.run(() => sendChallenge({ id: d.other!.id!, name: d.other!.name }, done ? d.id : null))} />
+          )}
+          {rematch.note && <Text style={{ fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{rematch.note}</Text>}
           <Button title="Back to challenges" variant="ghost" onPress={() => nav.backTo({ name: 'challenges' })} />
         </View>
       )}
@@ -565,6 +647,11 @@ function ResultHeader({ d }: { d: ChallengeDetail }) {
         <Text style={{ fontFamily: F.display, fontSize: 18, color: w(0.5) }}>vs</Text>
         {side(other, d.their_score, d.outcome === 'loss')}
       </View>
+      {d.forfeit && (
+        <Text style={[sub, { textAlign: 'center', marginTop: 12 }]}>
+          {d.outcome === 'win' ? `${other.name} didn't play in time.` : "You didn't play in time."}
+        </Text>
+      )}
       {d.h2h && <Text style={[sub, { textAlign: 'center', marginTop: 12 }]}>Head to head: {recordText(d.h2h)}</Text>}
     </Card>
   );
@@ -598,8 +685,8 @@ function WordCompare({ mine, theirs, otherName }: { mine: { word: string; points
   );
 }
 
-// ── After a 1v1 attempt (shown on the solo results screen) ─────────────────
-/** A challenge reply: wait for the server to settle it, then show who won. */
+// ── After a 1v1 round (shown on the solo results screen) ──────────────────
+/** Wait for the server to score the round, then show the result or that the other player hasn't played yet. */
 export function ChallengeOutcome({ challengeId }: { challengeId: string }) {
   const [d, setD] = useState<ChallengeDetail | null>(null);
   const [err, setErr] = useState(false);
@@ -611,7 +698,8 @@ export function ChallengeOutcome({ challengeId }: { challengeId: string }) {
         try {
           const x = await challengeDetail(challengeId);
           if (!live) return;
-          if (x.status === 'completed' || i === 5) {
+          // Done once it's settled, or once our own round is recorded (the other player may not have played).
+          if (x.status === 'completed' || (x.i_played && !x.they_played) || i === 5) {
             setD(x);
             if (x.outcome === 'win') sfx.win(); else if (x.outcome === 'loss') sfx.eliminated();
             void social.refresh();
@@ -625,58 +713,37 @@ export function ChallengeOutcome({ challengeId }: { challengeId: string }) {
   }, [challengeId]);
   if (err) return <Text style={[sub, { textAlign: 'center' }]}>{"Couldn't load the result yet. Open it from 1v1 challenges."}</Text>;
   if (!d) return <Loading />;
-  if (d.status !== 'completed') return <Text style={[sub, { textAlign: 'center' }]}>Your score is in. Results are on their way.</Text>;
+  if (d.status !== 'completed') {
+    return (
+      <Card style={{ padding: 16, alignItems: 'center' }}>
+        <Text style={{ fontFamily: F.displayBold, fontSize: 17, color: C.white, textAlign: 'center' }}>Your score is locked in ⚔️</Text>
+        <Text style={[sub, { textAlign: 'center', marginTop: 4 }]}>{`We'll let you know when ${d.other?.name ?? 'your opponent'} plays.`}</Text>
+      </Card>
+    );
+  }
   return <ResultHeader d={d} />;
 }
 
-/** A new challenge's round is over: send it to the chosen player (rematch) or let the player pick. */
-type SendState = { kind: 'idle' | 'sending' | 'sent' | 'error'; text?: string; token?: string };
-/** Remembers what happened to each round's challenge, so leaving and coming back never sends twice. */
-const sentFor = new Map<string, SendState>();
-
-export function ChallengeSend({ gameId, score, opponent, rematchOf }: { gameId: string | null; score: number; opponent: { id: string; name: string } | null; rematchOf?: string | null }) {
-  const [state, setStateRaw] = useState<SendState>(() => (gameId && sentFor.get(gameId)) || { kind: 'idle' });
-  const setState = useCallback((x: SendState) => { if (gameId) sentFor.set(gameId, x); setStateRaw(x); }, [gameId]);
+/** On solo results: a way into 1v1s. The challenge uses a fresh word, not this round. */
+export function ChallengeCta() {
   const [picking, setPicking] = useState(false);
-  const send = useCallback(async (to: { id: string; name: string } | null) => {
-    if (!gameId) return;
-    const prev = sentFor.get(gameId)?.kind;
-    if (prev === 'sending' || prev === 'sent') return;
-    setState({ kind: 'sending' });
-    try {
-      await engine.soloFinished;
-      const r = await createChallenge(gameId, to?.id ?? null, rematchOf);
-      if (!to) await shareText(challengeMessage(r.token));
-      setState({ kind: 'sent', text: to ? `Challenge sent to ${to.name}` : 'Challenge link created', token: r.token });
-    } catch (e) { setState({ kind: 'error', text: friendlyError(e, "Couldn't send the challenge. Try again.") }); }
-  }, [gameId, rematchOf, setState]);
-  // A rematch or a challenge from a profile goes out as soon as the round is scored.
-  useEffect(() => {
-    if (!opponent) return;
-    const t = setTimeout(() => { void send(opponent); }, 0);
-    return () => clearTimeout(t);
-  }, [opponent, send]);
-
-  if (!gameId) return null;
+  const action = useChallengeAction();
   return (
     <Card style={{ padding: 16, borderColor: 'rgba(61,139,255,0.45)', backgroundColor: 'rgba(61,139,255,0.10)' }}>
-      {state.kind === 'sent' ? (
-        <>
-          <Text style={{ fontFamily: F.displayBold, fontSize: 17, color: C.white, textAlign: 'center' }}>{state.text} ⚔️</Text>
-          <Text style={[sub, { textAlign: 'center', marginTop: 4 }]}>{"They have 72 hours to play. You'll be notified when results are in."}</Text>
-          {!opponent && state.token && <Button title="Share link again" variant="ghost" style={{ marginTop: 12 }} onPress={() => void shareText(challengeMessage(state.token!))} />}
-        </>
-      ) : state.kind === 'sending' ? (
-        <Loading />
-      ) : (
-        <>
-          <Text style={{ fontFamily: F.displayBold, fontSize: 17, color: C.white, textAlign: 'center' }}>Challenge a friend to beat {score}</Text>
-          <Text style={[sub, { textAlign: 'center', marginTop: 4 }]}>They get the same word and 60 seconds. They won’t see your score until they play.</Text>
-          {state.kind === 'error' && <Text style={{ marginTop: 8, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{state.text}</Text>}
-          <Button title={opponent ? `Try again` : 'Challenge a friend ⚔️'} style={{ marginTop: 12 }} onPress={() => (opponent ? void send(opponent) : setPicking(true))} />
-        </>
-      )}
-      <ChallengePicker open={picking} onClose={() => setPicking(false)} onPick={(to) => { setPicking(false); void send(to); }} />
+      <Text style={{ fontFamily: F.displayBold, fontSize: 17, color: C.white, textAlign: 'center' }}>Think a friend can beat you?</Text>
+      <Text style={[sub, { textAlign: 'center', marginTop: 4 }]}>Challenge them to a 1v1. Once they accept, you both play the same new word.</Text>
+      {action.note && <Text style={{ marginTop: 8, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{action.note}</Text>}
+      <Button title={action.busy ? 'Sending…' : 'Challenge a friend ⚔️'} disabled={action.busy} style={{ marginTop: 12 }} onPress={() => setPicking(true)} />
+      <ChallengePicker open={picking} onClose={() => setPicking(false)}
+        onPick={(to) => {
+          setPicking(false);
+          void action.run(async () => {
+            const r = await createChallenge(to?.id ?? null);
+            if (!to) await shareText(challengeMessage(r.token));
+            engine.goMenu();
+            nav.reset([{ name: 'challenges' }, { name: 'challenge', id: r.id }]);
+          });
+        }} />
     </Card>
   );
 }
@@ -693,6 +760,7 @@ export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onCl
   }, [open]);
   return (
     <Sheet open={open} onClose={onClose} title="Challenge a friend">
+      <Text style={[s.body, { fontSize: 14, marginBottom: 12 }]}>They have 72 hours to accept. Nobody plays until they do.</Text>
       <Button title="Share a challenge link" variant="ghost" onPress={() => onPick(null)} />
       <Text style={[sub, { textAlign: 'center', marginTop: 6 }]}>Anyone can accept it, even if they don’t have Last Word yet.</Text>
       {err && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral }}>{err}</Text>}
@@ -718,10 +786,12 @@ function notificationText(n: NotificationRow): string {
   switch (n.kind) {
     case 'friend_request': return `${who} sent you a friend request.`;
     case 'friend_accepted': return `${who} is now your friend.`;
-    case 'challenge_received': return `${who} challenged you to a 1v1.`;
-    case 'challenge_result': return `${who} played your challenge. See who won.`;
+    case 'challenge_received': return `${who} challenged you to a 1v1. Accept to play.`;
+    case 'challenge_accepted': return `${who} accepted your challenge. Your round is ready.`;
+    case 'challenge_played': return `${who} played their round. Now it's your turn.`;
+    case 'challenge_result': return `Your 1v1 with ${who} is finished. See who won.`;
     case 'challenge_declined': return `${who} declined your challenge.`;
-    case 'challenge_expiring': return `Your challenge from ${who} expires soon.`;
+    case 'challenge_expiring': return `Your 1v1 with ${who} expires soon.`;
     default: return 'You have a new notification.';
   }
 }
@@ -784,7 +854,16 @@ export function InviteScreen({ token }: { token: string }) {
   };
   const accept1v1 = async () => {
     setBusy(true); setMsg(null);
-    try { const id = await claimChallenge(token); playChallenge(id, inviter?.name ?? 'Player'); } catch (e) { setMsg(friendlyError(e)); } finally { setBusy(false); }
+    try {
+      const id = await claimChallenge(token);
+      await acceptChallenge(id);
+      nav.reset([{ name: 'challenges' }, { name: 'challenge', id }]);
+    } catch (e) { setMsg(friendlyError(e)); } finally { setBusy(false); }
+  };
+  const challengeBack = async () => {
+    if (!inviter?.id) return;
+    setBusy(true); setMsg(null);
+    try { await sendChallenge({ id: inviter.id, name: inviter.name }); } catch (e) { setMsg(friendlyError(e)); } finally { setBusy(false); }
   };
 
   return (
@@ -796,7 +875,7 @@ export function InviteScreen({ token }: { token: string }) {
           <Text style={[s.body, { textAlign: 'center', marginTop: 6, fontSize: 14 }]}>Add them as a friend to challenge each other to 1v1s.</Text>
           <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 16 }}>
             {done || inv.relation === 'friends'
-              ? <Button title={`Challenge ${inviter?.name} ⚔️`} onPress={() => inviter?.id && startChallenge({ id: inviter.id, name: inviter.name })} />
+              ? <Button title={busy ? 'Sending…' : `Challenge ${inviter?.name} ⚔️`} disabled={busy} onPress={() => void challengeBack()} />
               : <Button title={busy ? 'Adding…' : 'Add friend'} disabled={busy} onPress={() => void acceptFriend()} />}
             {inviter?.id && <Button title="View profile" variant="ghost" onPress={() => nav.push({ name: 'player', id: inviter.id! })} />}
           </View>
@@ -804,9 +883,9 @@ export function InviteScreen({ token }: { token: string }) {
       ) : (
         <>
           <Text style={{ fontFamily: F.displayBold, fontSize: 22, color: C.white, marginTop: 12, textAlign: 'center' }}>{inviter?.name} challenged you</Text>
-          <Text style={[s.body, { textAlign: 'center', marginTop: 6, fontSize: 14 }]}>Same word, 60 seconds, one try. The word is revealed when you start.</Text>
+          <Text style={[s.body, { textAlign: 'center', marginTop: 6, fontSize: 14 }]}>Accept to unlock the round. You both get the same word, 60 seconds and one try.</Text>
           {expires && <Text style={[sub, { marginTop: 6 }]}>{expires}</Text>}
-          <Button title={busy ? 'Starting…' : 'Play now'} disabled={busy} style={{ alignSelf: 'stretch', marginTop: 16 }} onPress={() => void accept1v1()} />
+          <Button title={busy ? 'Accepting…' : 'Accept challenge'} disabled={busy} style={{ alignSelf: 'stretch', marginTop: 16 }} onPress={() => void accept1v1()} />
         </>
       )}
       {msg && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{msg}</Text>}

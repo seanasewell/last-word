@@ -1,5 +1,5 @@
 // ── Friends, 1v1 challenges, invitations and notifications ─────────────────
-// All of this lives on the server (see the phase9_social migration): the server
+// All of this lives on the server (see the phase9_social and phase10 migrations): the server
 // times every attempt, checks and scores every word, settles each match once, and
 // never sends a challenge's word or score before the player is allowed to see it.
 import { useSyncExternalStore } from 'react';
@@ -23,21 +23,32 @@ export interface PlayerProfileData {
   relation: Relation; blocked: boolean;
 }
 
-export type ChallengeStatus = 'pending' | 'in_progress' | 'completed' | 'declined' | 'expired';
-export interface ChallengeRow {
+/** pending: sent, waiting for the opponent to accept. accepted: both in, each plays once. */
+export type ChallengeStatus = 'pending' | 'accepted' | 'completed' | 'declined' | 'expired' | 'cancelled';
+interface ChallengeFlags {
+  /** The opponent still has to accept or decline. */
+  needs_response: boolean;
+  /** Accepted, and you haven't finished your round yet. */
+  your_turn: boolean;
+  i_played: boolean; they_played: boolean;
+  /** Completed because one player didn't play in time. */
+  forfeit: boolean;
+}
+export interface ChallengeRow extends ChallengeFlags {
   id: string; role: 'challenger' | 'opponent'; other: Person | null; status: ChallengeStatus;
   created_at: string; expires_at: string; completed_at: string | null;
   my_score: number | null; their_score: number | null; outcome: 'win' | 'loss' | 'draw' | null;
-  your_turn: boolean; invite_token: string | null; source: string | null;
+  invite_token: string | null; source: string | null;
 }
 export interface WordPoints { word: string; points: number }
-export interface ChallengeDetail {
+export interface ChallengeDetail extends ChallengeFlags {
   id: string; status: ChallengeStatus; role: 'challenger' | 'opponent'; me: Person; other: Person | null;
-  created_at: string; expires_at: string; completed_at: string | null; invite_token: string | null;
+  created_at: string; accepted_at: string | null; expires_at: string; completed_at: string | null; invite_token: string | null;
   source: string | null; my_score: number | null; their_score: number | null; outcome: 'win' | 'loss' | 'draw' | null;
   my_words: WordPoints[]; their_words: WordPoints[] | null; h2h: Record3 | null;
 }
-export type NotificationKind = 'friend_request' | 'friend_accepted' | 'challenge_received' | 'challenge_result' | 'challenge_declined' | 'challenge_expiring';
+export type NotificationKind = 'friend_request' | 'friend_accepted' | 'challenge_received' | 'challenge_accepted' | 'challenge_played'
+  | 'challenge_result' | 'challenge_declined' | 'challenge_expiring';
 export interface NotificationRow { id: number; kind: NotificationKind; actor: Person; challenge_id: string | null; created_at: string; read: boolean }
 export interface InviteInfo {
   kind: 'friend' | 'challenge' | 'unknown';
@@ -54,7 +65,7 @@ export function friendlyError(e: unknown, fallback = 'Something went wrong. Try 
   const m = (e as { message?: string })?.message ?? '';
   if (/network|fetch|timed? ?out/i.test(m)) return "Can't reach the server. Check your connection.";
   // Server messages written for players are passed straight through.
-  if (/^(You|This|That|Player|Someone|Finish|Too many|Challenge not found)/.test(m)) return m;
+  if (/^(You|This|That|Player|Someone|Finish|Too many|Challenge not found|Waiting)/.test(m)) return m;
   return fallback;
 }
 
@@ -128,8 +139,9 @@ export async function acceptFriendInvite(token: string): Promise<string> {
 export const claimChallenge = (token: string) => call<string>('claim_challenge', { p_token: token });
 
 // ── Challenges ──
-export async function createChallenge(gameId: string, opponentId: string | null, rematchOf?: string | null): Promise<{ id: string; token: string }> {
-  const r = await call<{ id: string; token: string }>('create_challenge', { p_game: gameId, p_opponent: opponentId, p_rematch_of: rematchOf ?? null });
+/** Send a challenge (or make an open one for a link). Nobody plays until it's accepted. */
+export async function createChallenge(opponentId: string | null, rematchOf?: string | null): Promise<{ id: string; token: string }> {
+  const r = await call<{ id: string; token: string }>('create_challenge', { p_opponent: opponentId, p_rematch_of: rematchOf ?? null });
   void social.refresh();
   return r;
 }
@@ -138,7 +150,10 @@ export async function myChallenges(): Promise<ChallengeRow[]> {
   return rows.map((r) => ({ ...r, my_score: r.my_score == null ? null : num(r.my_score), their_score: r.their_score == null ? null : num(r.their_score) }));
 }
 export const challengeDetail = (id: string) => call<ChallengeDetail>('challenge_detail', { p_challenge: id });
+export async function acceptChallenge(id: string): Promise<void> { await call('accept_challenge', { p_challenge: id }); void social.refresh(); }
 export async function declineChallenge(id: string): Promise<void> { await call('decline_challenge', { p_challenge: id }); void social.refresh(); }
+/** Take back a challenge that hasn't been accepted yet. */
+export async function cancelChallenge(id: string): Promise<void> { await call('cancel_challenge', { p_challenge: id }); void social.refresh(); }
 
 // ── Notifications ──
 export const myNotifications = () => call<NotificationRow[]>('my_notifications');

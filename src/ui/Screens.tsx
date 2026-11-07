@@ -11,7 +11,7 @@ import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { ProgressHint, XpChip, afterGame, usePendingXp } from './Progress';
 import { nav } from './nav';
 import { ShareButton } from './Share';
-import { ChallengeOutcome, ChallengeSend } from './Social';
+import { ChallengeCta, ChallengeOutcome } from './Social';
 import { musicEnabled, sfx } from './sound';
 import { C, F, w } from './theme';
 
@@ -396,7 +396,7 @@ export function SoloResults({ s: g }: { s: GameState }) {
   const score = useAnimatedNumber(me.roundScore, 1100);
   const ch = g.challenge;
   const toChallenges = (id?: string) => () => { engine.goMenu(); nav.reset(id ? [{ name: 'challenges' }, { name: 'challenge', id }] : [{ name: 'challenges' }]); };
-  const footer = ch?.kind === 'reply' ? (
+  const footer = ch?.kind === 'play' ? (
     <>
       <Button title="See full results" onPress={() => afterGame(toChallenges(ch.challengeId))} />
       <Button title="Back to challenges" variant="ghost" onPress={() => afterGame(toChallenges())} />
@@ -404,12 +404,12 @@ export function SoloResults({ s: g }: { s: GameState }) {
   ) : (
     <ResultActions shareTitle="Share your score"
       share={me.roundScore > 0 ? { kind: 'solo', name: me.name, points: me.roundScore, bestWord: me.stats.bestWord, wordsFound: me.roundWords.length, source: g.source, newBest: g.newBest } : undefined}
-      onAgain={() => engine.startSingle(ch?.kind === 'new' ? { kind: 'new', opponent: null } : null)}
-      exitTitle={ch?.kind === 'new' ? 'Back to challenges' : 'Main menu'} onExit={ch?.kind === 'new' ? toChallenges() : () => engine.goMenu()} />
+      onAgain={() => engine.startSingle()}
+      exitTitle="Main menu" onExit={() => engine.goMenu()} />
   );
   return (
     <PageScroll footer={footer}>
-      {ch?.kind === 'reply' && <FadeUp style={{ paddingTop: 12 }}><ChallengeOutcome challengeId={ch.challengeId} /></FadeUp>}
+      {ch?.kind === 'play' && <FadeUp style={{ paddingTop: 12 }}><ChallengeOutcome challengeId={ch.challengeId} /></FadeUp>}
       <FadeUp style={{ alignItems: 'center', paddingTop: 16 }}>
         <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.7) }}>{`Time's up · ${g.source}`}</Text>
         <Text style={[{ fontFamily: F.display, fontSize: 72, color: C.amber }, s.tabular]}>{score}</Text>
@@ -428,9 +428,9 @@ export function SoloResults({ s: g }: { s: GameState }) {
         <Stat label="Longest word" value={me.stats.longestWord ? me.stats.longestWord.toUpperCase() : '—'} />
         <Stat label="Highest scoring" value={me.stats.bestWord ? `${me.stats.bestWord.word.toUpperCase()} +${me.stats.bestWord.points}` : '—'} />
       </View>
-      {ch?.kind !== 'reply' && g.serverId && (
+      {!ch && g.serverId && (
         <View style={{ marginTop: 16 }}>
-          <ChallengeSend gameId={g.serverId} score={me.roundScore} opponent={ch?.kind === 'new' ? ch.opponent : null} rematchOf={ch?.kind === 'new' ? ch.rematchOf ?? null : null} />
+          <ChallengeCta />
         </View>
       )}
       <Text style={[s.eyebrow, { marginTop: 22, marginBottom: 8 }]}>All your words</Text>

@@ -59,13 +59,10 @@ export interface Elimination {
 }
 
 /**
- * A 1v1 attempt. `new`: play a normal solo round, then send it as a challenge (to
- * `opponent` straight away when one is set, e.g. a rematch). `reply`: play someone's
- * challenge on their word; the server starts (or resumes) the attempt and its timer.
+ * A 1v1 attempt on an accepted challenge. The server starts (or resumes) it: same word for
+ * both players, one try each, and the deadline never moves once started.
  */
-export type ChallengeCtx =
-  | { kind: 'new'; opponent: { id: string; name: string } | null; rematchOf?: string | null }
-  | { kind: 'reply'; challengeId: string; opponentName: string };
+export type ChallengeCtx = { kind: 'play'; challengeId: string; opponentName: string };
 
 export interface GameState {
   mode: Mode | null;
@@ -137,6 +134,7 @@ interface Online {
 /** Postgres timestamps carry microseconds; trim to milliseconds before parsing. */
 function friendlyChallengeError(m: string): string {
   if (/expired/i.test(m)) return 'This challenge has expired.';
+  if (/waiting/i.test(m)) return "This challenge hasn't been accepted yet.";
   if (/closed|isn't yours|not yours/i.test(m)) return 'This challenge is no longer available.';
   if (/unavailable/i.test(m)) return 'This player is unavailable.';
   return "Couldn't start the challenge. Check your connection and try again.";
@@ -273,8 +271,8 @@ export class GameEngine {
       if (!sess.session) { this.connectionFailed(t); return; }
       const t0 = Date.now();
       const ch = this.state.challenge;
-      const reply = ch?.kind === 'reply' ? ch : null;
-      // A 1v1 reply starts (or resumes) the attempt on the challenger's word; its deadline never moves.
+      const reply = ch?.kind === 'play' ? ch : null;
+      // A 1v1 attempt starts (or resumes) on the challenge's word; its deadline never moves.
       const { data, error } = reply
         ? await supabase.rpc('challenge_play', { p_challenge: reply.challengeId })
         : await supabase.rpc('solo_start', { p_avoid: this.lastSingleSource || null });
