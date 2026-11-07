@@ -119,10 +119,15 @@ function cancelFade(track: MusicTrack) {
 function fadeOut(track: MusicTrack) {
   const m = musicPlayers.get(track);
   if (!m || fades.has(track)) return;
+  if (!m.playing) { m.pause(); return; }
   let v = m.volume;
   fades.set(track, setInterval(() => {
     v -= MUSIC_VOLUME / 10;
-    if (v <= 0) { m.pause(); m.volume = MUSIC_VOLUME; cancelFade(track); }
+    if (v <= 0) {
+      cancelFade(track);
+      if (!(inGame && currentTrack === track && !resultOn)) m.pause();
+      m.volume = MUSIC_VOLUME;
+    }
     else m.volume = v;
   }, 100));
 }
@@ -151,7 +156,9 @@ export function startGameMusic(gameId: string, track: MusicTrack) {
   const m = trackPlayer(track);
   if (!m || !musicEnabled()) return;
   cancelFade(track);
-  m.seekTo(0).then(resumeMusic, resumeMusic);
+  // Start right away; never wait on the seek (on some devices its promise never settles).
+  m.seekTo(0).catch(() => {});
+  resumeMusic();
 }
 
 function stopResultMusic() {
@@ -167,9 +174,10 @@ export function playResultMusic(kind: ResultMusic) {
   try {
     let p = resultPlayers.get(kind);
     if (!p) { p = createAudioPlayer(RESULTS[kind]); p.volume = MUSIC_VOLUME; resultPlayers.set(kind, p); }
-    const player = p;
     resultOn = true;
-    player.seekTo(0).then(() => { if (resultOn) player.play(); }, () => { if (resultOn) player.play(); });
+    p.seekTo(0).catch(() => {});
+    p.volume = MUSIC_VOLUME;
+    p.play();
   } catch { /* audio unavailable */ }
 }
 
