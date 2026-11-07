@@ -60,9 +60,13 @@ export function LastWordApp() {
   // Back on the home screen: pick up any XP the server awarded.
   useEffect(() => { if (g.phase === 'menu') void progress.refresh(); }, [g.phase]);
 
-  // Music: starts when a game begins, keeps going through rounds and results, fades out on the menu.
-  const gameKey = g.phase === 'sp-playing' || g.phase === 'round' ? g.matchId : null;
-  useEffect(() => { if (gameKey) startGameMusic(gameKey); }, [gameKey]);
+  // Music: the rounds track from a game's first round (and for solo), the championship track
+  // for the final 1v1; each keeps going through breaks and results, and fades out on the menu.
+  const inRound = g.phase === 'sp-playing' || g.phase === 'round';
+  const championship = inRound && g.mode === 'multi' && g.players.filter((p) => p.status === 'active').length === 2;
+  const musicTrack = championship ? 'championship' : 'rounds';
+  const gameKey = inRound ? g.matchId : null;
+  useEffect(() => { if (gameKey) startGameMusic(gameKey, musicTrack); }, [gameKey, musicTrack]);
   useEffect(() => { if (g.phase === 'menu' || g.phase === 'lobby' || g.phase === 'sp-countdown') stopGameMusic(); }, [g.phase]);
 
   let key: string;

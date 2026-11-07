@@ -46,76 +46,104 @@ export function onSoundChange(fn: () => void) {
 export function initSound() {
   setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {});
   (Object.keys(SOURCES) as Name[]).forEach((n) => { for (let i = 0; i < (POOLED[n] ?? 1); i++) player(n, i); });
-  ensureMusic();
+  trackPlayer('rounds');
+  trackPlayer('championship');
 }
 
 // ── Background music ──
-// "Mechanical Activation" (assets/sounds/music.m4a) plays quietly during games so sound
-// effects sit on top: it starts with a game's first round, plays straight through the whole match (looping) and on
-// the results, and fades out back on the menu. Its own setting; paused in the background.
+// Two tracks play quietly during games so sound effects sit on top: "rounds" for solo and
+// elimination rounds 1–4, "championship" for the final 1v1. A track starts when its round
+// begins and keeps looping through the breaks between rounds and on the results; moving to the
+// championship crossfades to its track, and back on the menu the music fades out.
+// Its own setting; paused in the background.
+export type MusicTrack = 'rounds' | 'championship';
 const MUSIC_KEY = 'lw.music';
 const MUSIC_VOLUME = 0.12;
-let music: AudioPlayer | null = null;
+const TRACKS: Record<MusicTrack, number> = {
+  rounds: require('@/assets/sounds/rounds.m4a'),
+  championship: require('@/assets/sounds/championship.m4a'),
+};
+const musicPlayers = new Map<MusicTrack, AudioPlayer>();
+const fades = new Map<MusicTrack, ReturnType<typeof setInterval>>();
 let musicHooked = false;
 let inGame = false;
-let fade: ReturnType<typeof setInterval> | null = null;
+let currentGame: string | null = null;
+let currentTrack: MusicTrack | null = null;
 
 export const musicEnabled = () => kv.get(MUSIC_KEY) !== 'off';
 export function setMusicEnabled(on: boolean) {
   kv.set(MUSIC_KEY, on ? 'on' : 'off');
   listeners.forEach((l) => l());
-  if (on && inGame) resumeMusic(); else if (!on) music?.pause();
+  if (on && inGame) resumeMusic(); else if (!on) musicPlayers.forEach((m) => m.pause());
 }
 
-function ensureMusic(): AudioPlayer | null {
+function trackPlayer(track: MusicTrack): AudioPlayer | null {
   try {
-    if (!music) {
-      music = createAudioPlayer(require('@/assets/sounds/music.m4a'));
-      music.loop = true;
-      music.volume = MUSIC_VOLUME;
+    let m = musicPlayers.get(track);
+    if (!m) {
+      m = createAudioPlayer(TRACKS[track]);
+      m.loop = true;
+      m.volume = MUSIC_VOLUME;
+      musicPlayers.set(track, m);
     }
     if (!musicHooked) {
       musicHooked = true;
       AppState.addEventListener('change', (s) => {
-        if (s === 'active') { if (inGame) resumeMusic(); } else music?.pause();
+        if (s === 'active') { if (inGame) resumeMusic(); } else musicPlayers.forEach((p) => p.pause());
       });
     }
-    return music;
+    return m;
   } catch { return null; }
 }
 
+function cancelFade(track: MusicTrack) {
+  const f = fades.get(track);
+  if (f) { clearInterval(f); fades.delete(track); }
+}
+
+/** Fade a track out over about a second, then pause it. */
+function fadeOut(track: MusicTrack) {
+  const m = musicPlayers.get(track);
+  if (!m || fades.has(track)) return;
+  let v = m.volume;
+  fades.set(track, setInterval(() => {
+    v -= MUSIC_VOLUME / 10;
+    if (v <= 0) { m.pause(); m.volume = MUSIC_VOLUME; cancelFade(track); }
+    else m.volume = v;
+  }, 100));
+}
+
 function resumeMusic() {
-  const m = ensureMusic();
-  if (!m || !musicEnabled()) return;
-  if (fade) { clearInterval(fade); fade = null; }
+  if (!currentTrack || !musicEnabled()) return;
+  const m = trackPlayer(currentTrack);
+  if (!m) return;
+  cancelFade(currentTrack);
   m.volume = MUSIC_VOLUME;
   m.play();
 }
 
-let currentGame: string | null = null;
-
-/** A game's round began: start the music from the top, unless this game is already playing it. */
-export function startGameMusic(gameId: string) {
-  if (inGame && currentGame === gameId) return;
+/**
+ * A round began. Starts `track` from the top, unless this game is already playing it (so the
+ * music runs straight through rounds 1–4); switching track fades the other one out.
+ */
+export function startGameMusic(gameId: string, track: MusicTrack) {
+  if (inGame && currentGame === gameId && currentTrack === track) return;
   currentGame = gameId;
   inGame = true;
-  const m = ensureMusic();
+  musicPlayers.forEach((_, t) => { if (t !== track) fadeOut(t); });
+  currentTrack = track;
+  const m = trackPlayer(track);
   if (!m || !musicEnabled()) return;
+  cancelFade(track);
   m.seekTo(0).then(resumeMusic, resumeMusic);
 }
 
-/** Back on the menu: fade the music out over about a second. */
+/** Back on the menu: fade the music out. */
 export function stopGameMusic() {
   inGame = false;
   currentGame = null;
-  const m = music;
-  if (!m || fade) return;
-  let v = m.volume;
-  fade = setInterval(() => {
-    v -= MUSIC_VOLUME / 10;
-    if (v <= 0) { m.pause(); m.volume = MUSIC_VOLUME; if (fade) clearInterval(fade); fade = null; }
-    else m.volume = v;
-  }, 100);
+  if (currentTrack) fadeOut(currentTrack);
+  currentTrack = null;
 }
 
 /** Sounds that can fire in quick succession get a few players each, so a new play never cuts off or races the last. */
