@@ -669,15 +669,13 @@ function WordCompare({ mine, theirs, otherName }: { mine: { word: string; points
   const a = new Set(mine.map((x) => x.word));
   const b = new Set(theirs.map((x) => x.word));
   // Green: words you both found. The rest stay plain.
-  const both = [...a].filter((x) => b.has(x));
-  const shared = new Set(both);
+  const shared = new Set([...a].filter((x) => b.has(x)));
   return (
     <>
       <Eyebrow right={`${mine.length} words`}>Your words</Eyebrow>
       <WordChips words={mine.map((x) => x.word)} highlight={shared} />
       <Eyebrow right={`${theirs.length} words`}>{`${otherName}'s words`}</Eyebrow>
       <WordChips words={theirs.map((x) => x.word)} highlight={shared} />
-      <Text style={[sub, { marginTop: 10 }]}>{both.length} {both.length === 1 ? 'word' : 'words'} found by both, shown in green.</Text>
     </>
   );
 }
