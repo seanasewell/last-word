@@ -51,7 +51,7 @@ export function initSound() {
 
 // ── Background music ──
 // "Mechanical Activation" (assets/sounds/music.m4a) plays quietly during games so sound
-// effects sit on top: it starts when a round begins, keeps going between rounds and on
+// effects sit on top: it starts with a game's first round, plays straight through the whole match (looping) and on
 // the results, and fades out back on the menu. Its own setting; paused in the background.
 const MUSIC_KEY = 'lw.music';
 const MUSIC_VOLUME = 0.12;
@@ -92,8 +92,12 @@ function resumeMusic() {
   m.play();
 }
 
-/** A game just started: play the music from the top. */
-export function startGameMusic() {
+let currentGame: string | null = null;
+
+/** A game's round began: start the music from the top, unless this game is already playing it. */
+export function startGameMusic(gameId: string) {
+  if (inGame && currentGame === gameId) return;
+  currentGame = gameId;
   inGame = true;
   const m = ensureMusic();
   if (!m || !musicEnabled()) return;
@@ -103,6 +107,7 @@ export function startGameMusic() {
 /** Back on the menu: fade the music out over about a second. */
 export function stopGameMusic() {
   inGame = false;
+  currentGame = null;
   const m = music;
   if (!m || fade) return;
   let v = m.volume;

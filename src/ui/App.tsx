@@ -50,7 +50,7 @@ export function LastWordApp() {
 
   // Music: starts when a game begins, keeps going through rounds and results, fades out on the menu.
   const gameKey = g.phase === 'sp-playing' || g.phase === 'round' ? g.matchId : null;
-  useEffect(() => { if (gameKey) startGameMusic(); }, [gameKey]);
+  useEffect(() => { if (gameKey) startGameMusic(gameKey); }, [gameKey]);
   useEffect(() => { if (g.phase === 'menu' || g.phase === 'lobby' || g.phase === 'sp-countdown') stopGameMusic(); }, [g.phase]);
 
   let key: string;
