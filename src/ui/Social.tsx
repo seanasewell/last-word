@@ -352,10 +352,11 @@ export function PlayerScreen({ id }: { id: string }) {
 // A challenge starts as an invitation. Nobody sees the word or can play until the
 // opponent accepts; then both play the same word once each, in any order.
 
-/** Send a challenge and open it. Throws a server message (e.g. an open one already exists). */
+/** Send a challenge, then show the challenges list. Throws a server message (e.g. an open one already exists). */
 export async function sendChallenge(to: { id: string; name: string }, rematchOf?: string | null): Promise<void> {
-  const r = await createChallenge(to.id, rematchOf ?? null);
-  nav.push({ name: 'challenge', id: r.id });
+  await createChallenge(to.id, rematchOf ?? null);
+  // Back to the list, where it shows under "Sent challenges".
+  nav.backTo({ name: 'challenges' });
 }
 
 /** Play your round of an accepted challenge (the word is revealed and the timer starts only now). */
@@ -517,6 +518,8 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
 function ChallengeRowView({ c, now, right }: { c: ChallengeRow; now: number; right?: React.ReactNode }) {
   const other: Person = c.other ?? { id: null, name: 'Deleted player', photo_url: null };
   const done = c.status === 'completed';
+  // A challenge you sent that hasn't been accepted has nothing more to show; its Cancel button is on the row.
+  const sentPending = c.role === 'challenger' && c.status === 'pending';
   const color = done ? (c.outcome === 'win' ? C.mint : c.outcome === 'loss' ? C.coral : C.amber)
     : c.needs_response || c.your_turn ? C.amber : w(0.65);
   const when = done
@@ -525,7 +528,7 @@ function ChallengeRowView({ c, now, right }: { c: ChallengeRow; now: number; rig
     : new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return (
     // A challenge that's ready goes straight into the round; anything else opens its page.
-    <Pressable onPress={() => (c.your_turn ? playChallenge(c.id, other.name) : nav.push({ name: 'challenge', id: c.id }))}
+    <Pressable disabled={sentPending} onPress={() => (c.your_turn ? playChallenge(c.id, other.name) : nav.push({ name: 'challenge', id: c.id }))}
       style={({ pressed }) => [row, { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16, backgroundColor: pressed ? 'rgba(61,139,255,0.12)' : w(0.04) }]}>
       <PersonAvatar p={other} size={38} />
       <View style={{ flex: 1 }}>
@@ -736,9 +739,9 @@ export function ChallengeCta() {
         onPick={(to) => {
           setPicking(false);
           void action.run(async () => {
-            const r = await createChallenge(to.id);
+            await createChallenge(to.id);
             engine.goMenu();
-            nav.reset([{ name: 'challenges' }, { name: 'challenge', id: r.id }]);
+            nav.reset([{ name: 'challenges' }]);
           });
         }} />
     </Card>
