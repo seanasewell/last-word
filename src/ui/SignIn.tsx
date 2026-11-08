@@ -93,14 +93,37 @@ export function useLinkFlow() {
     } else if (r.kind === 'error') setError(r.message);
   };
 
+  // Or just switch: this phone's guest is left behind.
+  const switchOnly = async () => {
+    const p = conflict;
+    if (!p) return;
+    setBusy(true); setError(null);
+    const r = await accounts.signIn(p);
+    setBusy(false);
+    if (r.kind === 'ok') { setConflict(null); void progress.refresh(); void social.refresh(); }
+    else if (r.kind === 'error') setError(r.message);
+  };
+
+  const name = conflict ? PROVIDER_NAME[conflict] : '';
+  const point = (title: string, body: string) => (
+    <View style={{ marginTop: 12 }}>
+      <Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.white }}>{title}</Text>
+      <Text style={[s.body, { fontSize: 14, marginTop: 2 }]}>{body}</Text>
+    </View>
+  );
   const sheet = (
     <Sheet open={!!conflict} onClose={() => { if (!busy) setConflict(null); }} title="You already have a player">
-      <Text style={s.body}>{`That ${conflict ? PROVIDER_NAME[conflict] : ''} account already has a Last Word player. Switch to it and bring this phone's progress with you: your XP, wins, streak, friends and challenges.`}</Text>
+      <Text style={s.body}>{`That ${name} account is already saved to another Last Word player. You can switch to that player in two ways:`}</Text>
+      {point('Switch and merge', 'Adds what you\'ve done on this phone (XP, wins, streak, friends and challenges) to that player. Nothing that player already has is lost.')}
+      {point('Switch without merging', 'Takes you to that player as it is. What you\'ve done on this phone is left behind and can\'t be recovered.')}
       {error && conflict && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral }}>{error}</Text>}
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
         <Button title="Cancel" variant="ghost" style={{ flex: 1 }} disabled={busy} onPress={() => setConflict(null)} />
         <Button title={busy ? 'Switching…' : 'Switch and merge'} style={{ flex: 1 }} disabled={busy} onPress={switchTo} />
       </View>
+      <Pressable onPress={() => void switchOnly()} disabled={busy} hitSlop={8} accessibilityRole="button" style={{ alignSelf: 'center', marginTop: 14 }}>
+        <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.72), textDecorationLine: 'underline' }}>Switch without merging</Text>
+      </Pressable>
     </Sheet>
   );
   return { busy, error: conflict ? null : error, link, sheet };
