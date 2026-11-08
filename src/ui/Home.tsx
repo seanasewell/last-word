@@ -6,8 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { accounts, weekRange, winsFor, type Account, type Period } from '@/lib/account';
 import { social, useSocial } from '@/lib/challenges';
 import { engine, type GameState } from '@/lib/engine';
-import { fetchModeLeaderboard, type Leaderboard, type RankEntry, type RankMode, type Scope } from '@/lib/ranks';
-import { countryByCode } from '@/lib/regions';
+import { fetchModeLeaderboard, type Leaderboard, type RankEntry, type RankMode } from '@/lib/ranks';
 import { Avatar, Card, FadeUp, HEADER_SIDE, HeaderLogo, ordinal, s, Screen, Segmented, TopToast, useNow } from './kit';
 import { nav, useNav, type Route } from './nav';
 import { DailyChallenges, LevelRing, RewardsTab, SectionHead, SweepBorder } from './Progress';
@@ -187,10 +186,9 @@ const MEDAL_TINT: Record<number, { bg: string; border: string }> = {
   3: { bg: 'rgba(217,138,78,0.24)', border: 'rgba(217,138,78,0.65)' }, // bronze
 };
 
-function RankRow({ e, scope, mode, onPress }: { e: RankEntry; scope: Scope; mode: RankMode; onPress?: () => void }) {
+function RankRow({ e, mode, onPress }: { e: RankEntry; mode: RankMode; onPress?: () => void }) {
   const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : null;
   const tint = MEDAL_TINT[e.rank];
-  const where = scope === 'world' ? `${e.country.flag} ${e.country.name}` : scope === 'national' ? e.region : `${e.country.flag} ${e.region}`;
   return (
     <Pressable onPress={onPress} disabled={!onPress} accessibilityHint={onPress ? 'Open this player’s profile' : undefined}
       style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16,
@@ -203,7 +201,6 @@ function RankRow({ e, scope, mode, onPress }: { e: RankEntry; scope: Scope; mode
       <Avatar player={{ glyph: e.glyph, hue: e.hue, photo: e.photo, isYou: e.isYou }} size={34} />
       <View style={{ flex: 1 }}>
         <Text numberOfLines={1} style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>{e.name}</Text>
-        <Text numberOfLines={1} style={{ fontFamily: F.body, fontSize: 11, color: w(0.65) }}>{where}</Text>
       </View>
       {mode === '1v1' ? (
         <View style={{ alignItems: 'flex-end' }}>
@@ -227,31 +224,23 @@ let rememberedMode: RankMode = 'elimination';
 function RanksTab({ account, refreshKey }: { account: Account; refreshKey: number }) {
   const [mode, setModeState] = useState<RankMode>(rememberedMode);
   const setMode = (m: RankMode) => { rememberedMode = m; setModeState(m); };
-  const [scope, setScope] = useState<Scope>('world');
   const [period, setPeriod] = useState<Period>('week');
   const [board, setBoard] = useState<{ key: string; data: Leaderboard } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const country = countryByCode(account.country);
   const now = useNow(true, 30_000);
-  const key = `${mode}-${scope}-${period}`;
+  const key = `${mode}-${period}`;
 
-  // Load the board for the current mode, scope and period (and on pull-to-refresh).
+  // Load the board for the current mode and period (and on pull-to-refresh). One worldwide board: location isn't used.
   const myWinsLocal = winsFor(account, period);
   useEffect(() => {
     let live = true;
-    fetchModeLeaderboard(mode, scope, period)
-      .then((data) => { if (live) { setBoard({ key: `${mode}-${scope}-${period}`, data }); setError(null); } })
+    fetchModeLeaderboard(mode, 'world', period)
+      .then((data) => { if (live) { setBoard({ key: `${mode}-${period}`, data }); setError(null); } })
       .catch(() => { if (live) setError("Couldn't load rankings. Pull down to try again."); });
     return () => { live = false; };
-  }, [mode, scope, period, refreshKey, myWinsLocal]);
+  }, [mode, period, refreshKey, myWinsLocal]);
 
-  const scopes: { id: Scope; label: string }[] = [
-    { id: 'world', label: '🌍 World' },
-    { id: 'national', label: `${country.flag} National` },
-    { id: 'state', label: `📍 ${country.regionLabel}` },
-  ];
   const p = PERIODS.find((x) => x.id === period)!;
-  const scopeName = scope === 'world' ? 'in the world' : scope === 'national' ? `in ${country.name}` : `in ${account.region}`;
   const reset = resetText(period, now);
   const data = board?.key === key ? board.data : null;
   const you = data?.you ?? null;
@@ -270,13 +259,12 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
       <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.72), marginTop: 4 }}>{`${t.sub} · ${periodRange(period, new Date(now))}`}</Text>
       <View style={{ gap: 8, marginTop: 16 }}>
         <Segmented options={MODES} value={mode} onChange={setMode} />
-        <Segmented options={scopes} value={scope} onChange={setScope} />
         <Segmented options={PERIODS} value={period} onChange={setPeriod} />
       </View>
       <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, padding: 16 }}>
         <Avatar player={meAvatar(account)} size={44} />
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.72) }}>Your rank {scopeName}</Text>
+          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.72) }}>Your rank</Text>
           <Text style={{ fontFamily: F.display, fontSize: 24, color: C.white }}>{you ? ordinal(you.rank) : data ? 'Not ranked yet' : '…'}</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
@@ -297,11 +285,11 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
       )}
       {data && data.entries.length > 0 && (
         <View style={{ gap: 6, marginTop: 8 }}>
-          {data.entries.map((e) => <RankRow key={e.id} e={e} scope={scope} mode={mode} onPress={e.isYou ? undefined : () => nav.push({ name: 'player', id: e.id })} />)}
+          {data.entries.map((e) => <RankRow key={e.id} e={e} mode={mode} onPress={e.isYou ? undefined : () => nav.push({ name: 'player', id: e.id })} />)}
           {you && you.rank > 50 && (
             <>
               <Text style={{ textAlign: 'center', color: w(0.5), paddingVertical: 2 }}>⋯</Text>
-              <RankRow e={you} scope={scope} mode={mode} />
+              <RankRow e={you} mode={mode} />
             </>
           )}
           <Text style={{ textAlign: 'center', marginTop: 12, fontFamily: F.body, fontSize: 11, color: w(0.55) }}>
@@ -317,7 +305,6 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
 
 function ProfileTab({ account, best }: { account: Account; best: number }) {
   const c = useSocial();
-  const country = countryByCode(account.country);
   const eliminationWins = Math.max(c?.elimination_wins ?? 0, account.totalWins);
   const soloBest = Math.max(c?.solo_best ?? 0, best);
   const record = c?.record ?? { wins: 0, losses: 0, draws: 0 };
@@ -333,7 +320,7 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         </Pressable>
       </View>
       <View style={{ marginTop: 10 }}>
-        <ProfileBody mine avatar={meAvatar(account)} name={account.name} place={`${country.flag} ${account.region}`}
+        <ProfileBody mine avatar={meAvatar(account)} name={account.name}
           friends={friends} onFriends={() => nav.push({ name: 'friends' })}
           eliminationWins={eliminationWins} soloBest={soloBest} record={record} onRecord={() => nav.push({ name: 'challenges', tab: 'history' })} />
       </View>

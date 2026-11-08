@@ -7,10 +7,9 @@ import { accounts, type Account } from '@/lib/account';
 import { sendFeedback, type FeedbackKind } from '@/lib/feedback';
 import { myBlocks, unblockPlayer, type BlockedPlayer } from '@/lib/moderation';
 import { PRIVACY_URL, SHOW_DEV_TOOLS, SUPPORT_URL, TERMS_URL } from '@/lib/release';
-import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { scoreWord } from '@/lib/words';
 import { cleanName, DevControls, NAME_MAX, nameError } from './Auth';
-import { Avatar, Button, OptionSheet, s, Segmented, Sheet, TextField, toast, Toggle } from './kit';
+import { Avatar, Button, s, Segmented, Sheet, TextField, toast, Toggle } from './kit';
 import { nav } from './nav';
 import { pickPhoto } from './photo';
 import { LevelingGuide } from './Progress';
@@ -48,7 +47,7 @@ export const MenuLabel = ({ emoji, text }: { emoji: string; text: string }) => (
 export function SettingsScreen({ account }: { account: Account }) {
   const [name, setName] = useState(account.name);
   const [saved, setSaved] = useState(false);
-  const [sheet, setSheet] = useState<null | 'photo' | 'country' | 'region' | 'delete' | 'signout' | 'dev' | 'blocked' | 'scoring' | 'leveling'>(null);
+  const [sheet, setSheet] = useState<null | 'photo' | 'delete' | 'signout' | 'dev' | 'blocked' | 'scoring' | 'leveling'>(null);
   const [photoErr, setPhotoErr] = useState<string | null>(null);
   const choosePhoto = async (source: 'library' | 'camera') => {
     setSheet(null);
@@ -62,7 +61,6 @@ export function SettingsScreen({ account }: { account: Account }) {
   const [sound, setSound] = useState(soundEnabled);
   const [musicOn, setMusicOn] = useState(musicEnabled);
   useEffect(() => onSoundChange(() => { setSound(soundEnabled()); setMusicOn(musicEnabled()); }), []);
-  const country = countryByCode(account.country);
   const err = nameError(name);
   const dirty = name.trim() !== account.name;
 
@@ -107,7 +105,7 @@ export function SettingsScreen({ account }: { account: Account }) {
           </View>
           <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.primary }}>{account.photo ? 'Change' : 'Add photo'}</Text>
         </Pressable>
-        <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.divider }}>
+        <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
           <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.7) }}>Display name</Text>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
             <TextField value={name} onChangeText={(t) => setName(cleanName(t))} maxLength={NAME_MAX} autoCorrect={false}
@@ -118,14 +116,6 @@ export function SettingsScreen({ account }: { account: Account }) {
           </View>
           {dirty && err && <Text style={{ marginTop: 4, fontFamily: F.body, fontSize: 12, color: C.coral }}>{err}</Text>}
         </View>
-        <Pressable onPress={() => setSheet('country')} style={row}>
-          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>Country</Text>
-          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{country.flag} {country.name}  ›</Text>
-        </Pressable>
-        <Pressable onPress={() => setSheet('region')} style={[row, { borderBottomWidth: 0 }]}>
-          <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>{country.regionLabel}</Text>
-          <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white }}>{account.region}  ›</Text>
-        </Pressable>
       </View>
 
       <AdvertisementsSection />
@@ -214,11 +204,6 @@ export function SettingsScreen({ account }: { account: Account }) {
         <LevelingGuide />
         <Button title="Close" variant="ghost" style={{ marginTop: 12 }} onPress={() => setSheet(null)} />
       </Sheet>
-      <OptionSheet open={sheet === 'country'} onClose={() => setSheet(null)} title="Country" value={account.country}
-        options={COUNTRIES.map((x) => ({ value: x.code, label: `${x.flag}  ${x.name}` }))}
-        onPick={(v) => { const c = countryByCode(v); accounts.update({ country: c.code, region: c.regions[0] }); }} />
-      <OptionSheet open={sheet === 'region'} onClose={() => setSheet(null)} title={country.regionLabel} value={account.region}
-        options={country.regions.map((r) => ({ value: r, label: r }))} onPick={(v) => accounts.update({ region: v })} />
       <Sheet open={sheet === 'signout'} onClose={() => setSheet(null)} title="Sign out?">
         <Text style={s.body}>{`Your progress is saved. Sign in with ${account.provider ? PROVIDER_NAME[account.provider] : ''} to pick up where you left off.`}</Text>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>

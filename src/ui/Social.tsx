@@ -19,7 +19,6 @@ import { nav, inviteTokenFrom } from './nav';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { sfx } from './sound';
 import { LevelCard, LevelSheet, StreakCard } from './Progress';
-import { countryByCode } from '@/lib/regions';
 import type { AvatarLike } from './kit';
 import { C, F, w } from './theme';
 
@@ -260,7 +259,7 @@ export function PlayerSearchScreen() {
       {shown && shown.length > 0 && (
         <View style={{ gap: 6, marginTop: 10 }}>
           {shown.map((r) => (
-            <PlayerRow key={r.user_id} p={{ id: r.user_id, name: r.name, photo_url: r.photo_url }} subtitle={r.region ?? undefined}
+            <PlayerRow key={r.user_id} p={{ id: r.user_id, name: r.name, photo_url: r.photo_url }}
               right={<RelationButton rel={r.relation} busy={busy === r.user_id}
                 onAdd={() => void act(r.user_id, () => sendFriendRequest(r.user_id))}
                 onAccept={() => void act(r.user_id, () => respondFriendRequest(r.user_id, true))} />} />
@@ -300,14 +299,14 @@ function FriendRowView({ f }: { f: FriendRow }) {
 
 // ── Profiles (yours and other players') ────────────────────────────────────
 /**
- * The profile layout, the same for you and for other players: photo, name, place and
+ * The profile layout, the same for you and for other players: photo, name and
  * friend count, then level, streak, wins, best and 1v1 record. Other players' profiles
  * add the friend and challenge buttons (`actions`) and your head-to-head (`extra`).
  */
-export function ProfileBody({ mine = false, avatar, name, place, friends, onFriends, xp, streak, eliminationWins, soloBest, record, onRecord, actions, extra }: {
+export function ProfileBody({ mine = false, avatar, name, friends, onFriends, xp, streak, eliminationWins, soloBest, record, onRecord, actions, extra }: {
   /** Your own profile: the level card opens the level sheet. */
   mine?: boolean;
-  avatar: AvatarLike; name: string; place: string; friends: number; onFriends?: () => void;
+  avatar: AvatarLike; name: string; friends: number; onFriends?: () => void;
   xp?: number; streak?: { current: number; best: number; days: string[] };
   eliminationWins: number; soloBest: number; record: Record3; onRecord?: () => void;
   actions?: React.ReactNode; extra?: React.ReactNode;
@@ -319,7 +318,6 @@ export function ProfileBody({ mine = false, avatar, name, place, friends, onFrie
       <View style={{ alignItems: 'center' }}>
         <Avatar player={avatar} size={104} ring />
         <Text style={{ fontFamily: F.displayBold, fontSize: 22, color: C.white, marginTop: 12, textAlign: 'center' }}>{name}</Text>
-        {place ? <Text style={{ fontFamily: F.body, fontSize: 13, color: w(0.65), marginTop: 2 }}>{place}</Text> : null}
         <Pressable onPress={onFriends} disabled={!onFriends} accessibilityRole={onFriends ? 'button' : undefined} hitSlop={6}
           style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999,
             backgroundColor: pressed ? 'rgba(61,139,255,0.2)' : w(0.06), borderWidth: 1, borderColor: w(0.1) })}>
@@ -374,7 +372,6 @@ export function PlayerScreen({ id }: { id: string }) {
   };
   const h = p.h2h;
   const streak = h?.streak ? (h.streak.holder === 'me' ? `You've won the last ${h.streak.count}` : `${p.name} has won the last ${h.streak.count}`) : null;
-  const country = countryByCode(p.country);
   const played = h ? h.wins + h.losses + h.draws : 0;
 
   const actions = !p.is_me && !p.blocked ? (
@@ -423,7 +420,7 @@ export function PlayerScreen({ id }: { id: string }) {
 
   return (
     <View>
-      <ProfileBody avatar={personAvatar(p)} name={p.name} place={p.region ? `${country.flag} ${p.region}` : country.flag}
+      <ProfileBody avatar={personAvatar(p)} name={p.name}
         friends={p.friends} xp={p.xp} streak={{ current: p.streak.current, best: p.streak.best, days: p.days }}
         eliminationWins={p.elimination_wins} soloBest={p.solo_best} record={p.record} actions={actions} extra={extra} />
 

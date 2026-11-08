@@ -9,10 +9,9 @@ import { GAMES_PER_AD } from '@/lib/monetizationConfig';
 import { purchases, setSimOutcome, simOutcome, useAdFree, type SimOutcome } from '@/lib/purchases';
 import { PRIVACY_URL, SHOW_DEV_TOOLS, TERMS_URL } from '@/lib/release';
 import type { Provider } from '@/lib/social';
-import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { AnimatedTileLogo } from './AnimatedLogo';
 import { Captcha, type CaptchaHandle } from './Captcha';
-import { Avatar, Button, FadeUp, OptionSheet, s, Screen, SelectRow, Sheet, TextField, useAuth } from './kit';
+import { Avatar, Button, FadeUp, s, Screen, Sheet, TextField, useAuth } from './kit';
 import { pickPhoto } from './photo';
 import { DevLevelTiers } from './Progress';
 import { ProviderButtons } from './SignIn';
@@ -102,7 +101,7 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
   return (
     <Sheet open={open} onClose={close} title="Developer controls">
       <View style={{ gap: 8 }}>
-        {!signedIn && <DevRow title={busy ? 'Starting…' : captchaToken ? 'Skip onboarding' : 'Skip onboarding (checking…)'} sub="Creates a new player named Dev tester in California"
+        {!signedIn && <DevRow title={busy ? 'Starting…' : captchaToken ? 'Skip onboarding' : 'Skip onboarding (checking…)'} sub="Creates a new player named Dev tester"
           onPress={busy || !captchaToken ? undefined : () => run(async () => { const err = await accounts.devSkipSignup(captchaToken); onTokenUsed?.(); return err; })} right={<Text style={{ color: w(0.55) }}>→</Text>} />}
         {signedIn && (
           <>
@@ -110,7 +109,7 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
               right={<Text style={{ fontFamily: F.display, color: C.mint }}>{skill == null ? '' : `${skill.toFixed(2)}×`}</Text>} />
             <DevRow title="Jump to the championship round" sub="A 1v1 against a bot, as if you'd survived rounds 1–4. Played on this phone only; not counted toward ranks or XP"
               onPress={() => { onClose(); engine.devStartChampionship(); }} right={<Text style={{ color: w(0.55) }}>→</Text>} />
-            <DevRow title="Restart onboarding" sub="Clears name, photo and region for this account" onPress={() => run(() => accounts.devRestartOnboarding())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
+            <DevRow title="Restart onboarding" sub="Clears name and photo for this account" onPress={() => run(() => accounts.devRestartOnboarding())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
             <DevLevelTiers />
             <AdDevRows />
           </>
@@ -206,10 +205,8 @@ export function Onboarding() {
   const [step, setStep] = useState(0);
   const [name, setName] = useState(account?.name ?? '');
   const [photoErr, setPhotoErr] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<null | 'country' | 'region'>(null);
   const [uploading, setUploading] = useState(false);
   if (!account) return null;
-  const country = countryByCode(account.country);
   const nErr = nameError(name);
 
   const choose = async (source: 'library' | 'camera') => {
@@ -225,7 +222,7 @@ export function Onboarding() {
 
   const dots = (
     <View style={{ flexDirection: 'row', gap: 6 }}>
-      {[0, 1, 2].map((i) => <View key={i} style={{ height: 6, width: i === step ? 24 : 6, borderRadius: 3, backgroundColor: i === step ? C.primary : i < step ? 'rgba(61,139,255,0.6)' : w(0.15) }} />)}
+      {[0, 1].map((i) => <View key={i} style={{ height: 6, width: i === step ? 24 : 6, borderRadius: 3, backgroundColor: i === step ? C.primary : i < step ? 'rgba(61,139,255,0.6)' : w(0.15) }} />)}
     </View>
   );
   const header = (
@@ -253,40 +250,22 @@ export function Onboarding() {
     );
   }
 
-  if (step === 1) {
-    return (
-      <Step footer={account.photo ? <>
-        <Button title={uploading ? 'Uploading…' : 'Continue'} disabled={uploading} onPress={() => setStep(2)} />
-        <Button title="Choose a different photo" variant="ghost" onPress={() => choose('library')} />
-      </> : <>
-        <Button title="Choose a photo" onPress={() => choose('library')} />
-        <Button title="Take a photo" variant="ghost" onPress={() => choose('camera')} />
-        <Pressable onPress={() => setStep(2)} hitSlop={8} style={{ alignSelf: 'center', paddingTop: 4 }}><Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.72) }}>Skip for now</Text></Pressable>
-      </>}>
-        {header}
-        <Text style={[s.h1, { marginTop: 20 }]}>Add a photo</Text>
-        <Text style={[s.body, { marginTop: 8 }]}>Add a picture of yourself. It appears next to your name in matches and ranks.</Text>
-        <View style={{ alignItems: 'center', marginTop: 36 }}>
-          <Avatar player={{ glyph: account.name[0]?.toUpperCase() ?? '?', hue: 210, isYou: true, photo: account.photo }} size={148} ring />
-        </View>
-        {photoErr && <Text style={{ textAlign: 'center', marginTop: 14, fontFamily: F.body, fontSize: 14, color: C.coral }}>{photoErr}</Text>}
-      </Step>
-    );
-  }
-
   return (
-    <Step footer={<Button title="Start playing" disabled={!account.region} onPress={() => accounts.finishOnboarding()} />}>
+    <Step footer={account.photo ? <>
+      <Button title={uploading ? 'Uploading…' : 'Start playing'} disabled={uploading} onPress={() => accounts.finishOnboarding()} />
+      <Button title="Choose a different photo" variant="ghost" onPress={() => choose('library')} />
+    </> : <>
+      <Button title="Choose a photo" onPress={() => choose('library')} />
+      <Button title="Take a photo" variant="ghost" onPress={() => choose('camera')} />
+      <Pressable onPress={() => accounts.finishOnboarding()} hitSlop={8} style={{ alignSelf: 'center', paddingTop: 4 }}><Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: w(0.72) }}>Skip for now</Text></Pressable>
+    </>}>
       {header}
-      <Text style={[s.h1, { marginTop: 20 }]}>Where do you play from?</Text>
-      <Text style={[s.body, { marginTop: 8 }]}>Used for your national and {country.regionLabel.toLowerCase()} rankings.</Text>
-      <View style={{ gap: 10, marginTop: 24 }}>
-        <SelectRow label="Country" value={`${country.flag}  ${country.name}`} placeholder="Country" active={sheet === 'country'} onPress={() => setSheet('country')} />
-        <SelectRow label={country.regionLabel} value={account.region} placeholder={`Choose your ${country.regionLabel.toLowerCase()}`} active={sheet === 'region'} onPress={() => setSheet('region')} />
+      <Text style={[s.h1, { marginTop: 20 }]}>Add a photo</Text>
+      <Text style={[s.body, { marginTop: 8 }]}>Add a picture of yourself. It appears next to your name in matches and ranks.</Text>
+      <View style={{ alignItems: 'center', marginTop: 36 }}>
+        <Avatar player={{ glyph: account.name[0]?.toUpperCase() ?? '?', hue: 210, isYou: true, photo: account.photo }} size={148} ring />
       </View>
-      <OptionSheet open={sheet === 'country'} onClose={() => setSheet(null)} title="Country" value={account.country}
-        options={COUNTRIES.map((x) => ({ value: x.code, label: `${x.flag}  ${x.name}` }))} onPick={(v) => accounts.update({ country: v, region: '' })} />
-      <OptionSheet open={sheet === 'region'} onClose={() => setSheet(null)} title={country.regionLabel} value={account.region}
-        options={country.regions.map((r) => ({ value: r, label: r }))} onPick={(v) => accounts.update({ region: v })} />
+      {photoErr && <Text style={{ textAlign: 'center', marginTop: 14, fontFamily: F.body, fontSize: 14, color: C.coral }}>{photoErr}</Text>}
     </Step>
   );
 }

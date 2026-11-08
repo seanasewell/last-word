@@ -5,7 +5,6 @@
 import { decode } from 'base64-arraybuffer';
 
 import { kv } from './kv';
-import { COUNTRIES } from './regions';
 import { linkProvider, revokeApple, signInWithProvider, type Provider, type SocialResult } from './social';
 import { supabase } from './supabase';
 
@@ -62,23 +61,13 @@ export function winsFor(a: Account, period: Period, now = new Date()): number {
   return n;
 }
 
-/** Best guess at the player's country from the phone's region setting. */
-function deviceCountry(): string {
-  try {
-    const region = new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale).maximize().region;
-    if (region && COUNTRIES.some((c) => c.code === region)) return region;
-  } catch {
-    // Fall back below.
-  }
-  return 'US';
-}
-
 function providerOf(user: { identities?: { provider: string }[]; app_metadata?: { provider?: string; providers?: string[] } }): Provider | null {
   const all = [...(user.identities ?? []).map((i) => i.provider), ...(user.app_metadata?.providers ?? []), user.app_metadata?.provider ?? ''];
   return all.includes('apple') ? 'apple' : all.includes('google') ? 'google' : null;
 }
 
-const isComplete = (a: Account) => !!a.name && !!a.region;
+// Onboarding is done once there's a name (location isn't asked for).
+const isComplete = (a: Account) => !!a.name;
 
 /** Turn Supabase errors into short, player-facing messages. */
 function friendly(message: string | undefined): string {
@@ -119,7 +108,7 @@ class AccountStore {
 
     let { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
     if (!profile) {
-      const created = await supabase.from('profiles').insert({ id: user.id, country: deviceCountry() }).select('*').single();
+      const created = await supabase.from('profiles').insert({ id: user.id }).select('*').single();
       profile = created.data;
     }
     const { data: results } = await supabase.from('match_results').select('won, played_at').eq('user_id', user.id);
@@ -264,7 +253,7 @@ class AccountStore {
   async devSkipSignup(captchaToken: string): Promise<string | null> {
     const err = await this.start(captchaToken);
     if (err) return err;
-    await this.update({ name: 'Dev tester', region: 'California', country: 'US' });
+    await this.update({ name: 'Dev tester' });
     this.finishOnboarding();
     return null;
   }
@@ -274,7 +263,7 @@ class AccountStore {
     return error ? null : Number(data);
   }
   async devRestartOnboarding() {
-    await this.update({ name: '', region: '', photo: null }).catch(() => null);
+    await this.update({ name: '', photo: null }).catch(() => null);
     this.set({ onboarding: true });
   }
   /** Signs out and clears this phone's local data. The old player stays on the server but can't be reached again. */
