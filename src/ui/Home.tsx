@@ -344,7 +344,7 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
         </Pressable>
       </View>
       <View style={{ marginTop: 10 }}>
-        <ProfileBody avatar={meAvatar(account)} name={account.name} place={`${country.flag} ${account.region}`}
+        <ProfileBody mine avatar={meAvatar(account)} name={account.name} place={`${country.flag} ${account.region}`}
           friends={friends} onFriends={() => nav.push({ name: 'friends' })}
           eliminationWins={eliminationWins} soloBest={soloBest} record={record} onRecord={() => nav.push({ name: 'challenges', tab: 'history' })} />
       </View>

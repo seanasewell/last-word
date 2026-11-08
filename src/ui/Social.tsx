@@ -306,7 +306,9 @@ function FriendRowView({ f }: { f: FriendRow }) {
  * friend count, then level, streak, wins, best and 1v1 record. Other players' profiles
  * add the friend and challenge buttons (`actions`) and your head-to-head (`extra`).
  */
-export function ProfileBody({ avatar, name, place, friends, onFriends, xp, streak, eliminationWins, soloBest, record, onRecord, actions, extra }: {
+export function ProfileBody({ mine = false, avatar, name, place, friends, onFriends, xp, streak, eliminationWins, soloBest, record, onRecord, actions, extra }: {
+  /** Your own profile: the level card opens the level sheet. */
+  mine?: boolean;
   avatar: AvatarLike; name: string; place: string; friends: number; onFriends?: () => void;
   xp?: number; streak?: { current: number; best: number; days: string[] };
   eliminationWins: number; soloBest: number; record: Record3; onRecord?: () => void;
@@ -331,8 +333,8 @@ export function ProfileBody({ avatar, name, place, friends, onFriends, xp, strea
       {actions}
 
       <View style={{ marginTop: 20, gap: 12 }}>
-        <LevelCard large xp={xp} onPress={() => setLevelOpen(true)} />
-        <LevelSheet open={levelOpen} onClose={() => setLevelOpen(false)} xp={xp} />
+        <LevelCard large xp={xp} onPress={mine ? () => setLevelOpen(true) : undefined} />
+        {mine && <LevelSheet open={levelOpen} onClose={() => setLevelOpen(false)} xp={xp} />}
         <StreakCard data={streak} />
       </View>
 
