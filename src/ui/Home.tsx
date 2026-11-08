@@ -76,7 +76,7 @@ function Bell() {
       <Text style={{ fontSize: 21 }}>🔔</Text>
       {/* Just a dot: there's something new. */}
       {unread > 0 && (
-        <View style={{ position: 'absolute', top: 7, right: 8, width: 10, height: 10, borderRadius: 5, backgroundColor: C.coral, borderWidth: 2, borderColor: C.bg }} />
+        <View style={{ position: 'absolute', top: 7, right: 8, width: 10, height: 10, borderRadius: 5, backgroundColor: C.coral, borderWidth: 2, borderColor: C.bgTop }} />
       )}
     </Pressable>
   );
@@ -123,7 +123,7 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
           <Card style={{ borderRadius: 24, padding: 20 }}>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12 }}>
               <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white }}>Solo challenge</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
                 <Text style={s.eyebrow}>Best</Text>
                 <Text style={[{ fontFamily: F.display, fontSize: 18, color: C.amber }, s.tabular]}>{best}</Text>
               </View>
