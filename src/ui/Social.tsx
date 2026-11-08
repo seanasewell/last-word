@@ -500,7 +500,8 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
   const invites = all.filter((c) => isActive(c) && c.needs_response);
   const ready = all.filter((c) => isActive(c) && c.your_turn);
   const waiting = all.filter((c) => isActive(c) && !c.needs_response && !c.your_turn);
-  const history = all.filter((c) => !isActive(c));
+  // Declined challenges don't show in History.
+  const history = all.filter((c) => !isActive(c) && c.status !== 'declined');
   const cancel = async (c: ChallengeRow) => {
     setNote(null);
     try { await cancelChallenge(c.id); } catch (e) { setNote(friendlyError(e)); }
@@ -592,7 +593,7 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
 
       {list.data && tab === 'history' && (
         history.length === 0 ? (
-          <View style={{ marginTop: 12 }}><Empty emoji="📜" title="No challenge history" body="Finished, declined and expired challenges show up here." /></View>
+          <View style={{ marginTop: 12 }}><Empty emoji="📜" title="No challenge history" body="Finished and expired challenges show up here." /></View>
         ) : (
           <View style={{ gap: 6, marginTop: 12 }}>
             {history.map((c) => (
