@@ -494,7 +494,8 @@ export function ChallengesScreen({ tab: initial = 'active' }: { tab?: 'active' |
   const ready = all.filter((c) => isActive(c) && c.your_turn);
   const waiting = all.filter((c) => isActive(c) && !c.needs_response && !c.your_turn);
   // Declined challenges don't show in History.
-  const history = all.filter((c) => !isActive(c) && c.status !== 'declined');
+  // Declined and cancelled challenges just go away (no win or loss to show).
+  const history = all.filter((c) => !isActive(c) && c.status !== 'declined' && c.status !== 'cancelled');
   const cancel = async (c: ChallengeRow) => {
     setNote(null);
     try { await cancelChallenge(c.id); } catch (e) { setNote(friendlyError(e)); }
