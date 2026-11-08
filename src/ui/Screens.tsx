@@ -414,7 +414,7 @@ function ChallengeResults({ g, challengeId }: { g: GameState; challengeId: strin
               </View>
             )} />
         </FadeUp>
-        <View style={{ alignItems: 'center', marginTop: 16 }}><XpChip gameId={g.serverId} /></View>
+        <View style={{ marginTop: 16 }}><XpChip gameId={g.serverId} align="start" /></View>
         {g.missedLongest.length > 0 && (
           <>
             <Text style={[s.eyebrow, { marginTop: 18, marginBottom: 8 }]}>Long ones you missed</Text>

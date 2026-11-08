@@ -400,7 +400,6 @@ export function PlayerScreen({ id }: { id: string }) {
         )}
       </View>
       {p.relation === 'sent' && <Text style={[sub, { textAlign: 'center', marginTop: 8 }]}>{`Waiting for ${p.name} to accept. Tap to cancel.`}</Text>}
-      {p.relation === 'received' && <Text style={[sub, { textAlign: 'center', marginTop: 8 }]}>{`${p.name} wants to be friends.`}</Text>}
       {note && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{note}</Text>}
     </>
   ) : p.blocked ? (

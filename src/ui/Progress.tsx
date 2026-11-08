@@ -342,11 +342,11 @@ export function RewardsTab() {
 
 // ── After a game ───────────────────────────────────────────────────────────
 /** Small "+N XP" chip on result screens (once the server has scored the game). */
-export function XpChip({ gameId }: { gameId: string | null }) {
+export function XpChip({ gameId, align = 'center' }: { gameId: string | null; align?: 'center' | 'start' }) {
   const gained = usePendingXp(gameId);
   if (gained <= 0) return null;
   return (
-    <Animated.View entering={ZoomIn.duration(320)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,181,71,0.4)', backgroundColor: 'rgba(255,181,71,0.1)', paddingHorizontal: 12, paddingVertical: 4 }}>
+    <Animated.View entering={ZoomIn.duration(320)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: align === 'start' ? 'flex-start' : 'center', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,181,71,0.4)', backgroundColor: 'rgba(255,181,71,0.1)', paddingHorizontal: 12, paddingVertical: 4 }}>
       <Text style={{ fontSize: 13 }}>⭐</Text>
       <Text style={[{ fontFamily: F.bodyBold, fontSize: 14, color: C.amber }, s.tabular]}>+{fmt(gained)} XP</Text>
     </Animated.View>
