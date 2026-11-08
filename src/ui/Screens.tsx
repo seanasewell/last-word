@@ -383,7 +383,7 @@ export function FinalResults({ s: g }: { s: GameState }) {
         </View>
         {sheet}
       </PageScroll>
-      <Confetti big={youWon} />
+      {youWon && <Confetti big />}
     </View>
   );
 }
