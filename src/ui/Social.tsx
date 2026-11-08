@@ -618,7 +618,7 @@ function ChallengeRowView({ c, now, right, pressable = false }: { c: ChallengeRo
   const color = done ? (c.outcome === 'win' ? C.mint : c.outcome === 'loss' ? C.coral : C.amber)
     : c.needs_response || c.your_turn ? C.amber : w(0.65);
   const when = done
-    ? new Date(c.completed_at ?? c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    ? `${c.my_score ?? '–'} – ${c.their_score ?? '–'} · ${new Date(c.completed_at ?? c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
     : c.status === 'pending' || c.status === 'accepted' ? timeLeft(c.expires_at, now)
     : new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return (
