@@ -99,8 +99,9 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
     else if (closeAfter) close();
   };
   return (
-    <Sheet open={open} onClose={close} title="Developer controls">
-      <View style={{ gap: 8 }}>
+    <Sheet open={open} onClose={close} title="Developer controls" tall={signedIn}>
+      {/* Scrolls: there are more controls than fit on a small phone. */}
+      <ScrollView style={signedIn ? { flex: 1 } : undefined} contentContainerStyle={{ gap: 8, paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
         {!signedIn && <DevRow title={busy ? 'Starting…' : captchaToken ? 'Skip onboarding' : 'Skip onboarding (checking…)'} sub="Creates a new player named Dev tester"
           onPress={busy || !captchaToken ? undefined : () => run(async () => { const err = await accounts.devSkipSignup(captchaToken); onTokenUsed?.(); return err; })} right={<Text style={{ color: w(0.55) }}>→</Text>} />}
         {signedIn && (
@@ -117,7 +118,7 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
         <DevRow danger armed={confirmReset} title={confirmReset ? 'Tap again to sign out and clear' : 'Reset this phone'} sub="Signs out and clears this phone. A guest player can't be recovered"
           onPress={() => { if (confirmReset) run(() => accounts.devResetAll()); else setConfirmReset(true); }} />
         {msg && <Text style={{ fontFamily: F.body, fontSize: 13, color: C.coral, marginTop: 4 }}>{msg}</Text>}
-      </View>
+      </ScrollView>
     </Sheet>
   );
 }
