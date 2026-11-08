@@ -15,7 +15,7 @@ import { Home } from './Home';
 import { useAuth, useGame } from './kit';
 import { nav, useNav } from './nav';
 import { openNotification } from './Social';
-import { playResultMusic, startGameMusic, stopGameMusic } from './sound';
+import { musicEnabled, playResultMusic, sfx, startGameMusic, stopGameMusic } from './sound';
 import { CelebrationHost } from './Progress';
 import { SimulatedAdHost } from './RemoveAds';
 import { EliminationScreen, FinalResults, Lobby, SoloCountdown, SoloResults } from './Screens';
@@ -103,6 +103,12 @@ export function LastWordApp() {
     : null;
   const resultKey = result && out ? `${g.matchId}:${out.round}:${result}` : null;
   useEffect(() => { if (resultKey && result) playResultMusic(result); }, [resultKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Solo: a new personal best gets the win song (or its jingle with music off). 1v1 results pick their own.
+  const soloBestKey = g.phase === 'sp-results' && g.newBest && !g.challenge ? `${g.matchId}:best` : null;
+  useEffect(() => {
+    if (!soloBestKey) return;
+    if (musicEnabled()) playResultMusic('win'); else sfx.win();
+  }, [soloBestKey]);
 
   let key: string;
   let screen: React.ReactNode;
