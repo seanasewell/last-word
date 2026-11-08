@@ -135,7 +135,8 @@ function ChallengeCard({ def, value, done }: { def: ChallengeDef; value: number;
   );
 }
 
-const SectionHead = ({ title, right }: { title: string; right?: string }) => (
+/** A section title (Games, Daily challenges…) with optional text on the right. */
+export const SectionHead = ({ title, right }: { title: string; right?: string }) => (
   <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
     <Text style={{ fontFamily: F.displayBold, fontSize: 18, color: C.white }}>{title}</Text>
     {right ? <Text style={[{ fontFamily: F.bodySemi, fontSize: 12, color: w(0.7) }, s.tabular]}>{right}</Text> : null}

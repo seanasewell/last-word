@@ -10,7 +10,7 @@ import { fetchModeLeaderboard, type Leaderboard, type RankEntry, type RankMode, 
 import { countryByCode } from '@/lib/regions';
 import { Avatar, Card, FadeUp, HEADER_SIDE, HeaderLogo, ordinal, s, Screen, Segmented, TopToast, useNow } from './kit';
 import { nav, useNav, type Route } from './nav';
-import { DailyChallenges, LevelCard, RewardsTab, SweepBorder } from './Progress';
+import { DailyChallenges, LevelCard, RewardsTab, SectionHead, SweepBorder } from './Progress';
 import { RemoveAdsCard } from './RemoveAds';
 import { FeedbackScreen, SettingsScreen } from './Settings';
 import { SaveProgressNudge } from './SignIn';
@@ -83,10 +83,12 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
       </View>
 
       <FadeUp delay={60} style={{ marginTop: 24 }}><LevelCard /></FadeUp>
+      <FadeUp delay={90}><RemoveAdsCard /></FadeUp>
       <SaveProgressNudge account={account} />
       <InviteRecoveryBanner />
 
-      <FadeUp delay={120} style={{ marginTop: 12, gap: 12 }}>
+      <FadeUp delay={120} style={{ marginTop: 28, gap: 12 }}>
+        <SectionHead title="Games" />
         <Pressable onPress={() => engine.startMatch()} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
           <View style={{ borderRadius: 24, backgroundColor: C.card, padding: 22 }}>
             <SweepBorder radius={24} />
@@ -136,8 +138,6 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
             <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>Challenge friends to beat your score.</Text>
           </Card>
         </Pressable>
-
-        <RemoveAdsCard />
       </FadeUp>
 
       <FadeUp delay={180} style={{ marginTop: 28 }}><DailyChallenges /></FadeUp>

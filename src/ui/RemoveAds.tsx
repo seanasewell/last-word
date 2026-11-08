@@ -1,4 +1,5 @@
 // ── Remove ads: Play tab and Settings cards, purchase sheet, confirmation; simulated ad screen ──
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -6,7 +7,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { registerSimulatedAdHost } from '@/lib/ads';
 import { purchases, useAdFree } from '@/lib/purchases';
-import { Button, Card, s, Sheet } from './kit';
+import { Button, s, Sheet } from './kit';
 import { C, F, w } from './theme';
 
 const GREEN = '#22A06B';
@@ -83,23 +84,31 @@ export function AdvertisementsSection() {
   );
 }
 
-/** Play tab: a "Remove ads" card that opens the purchase sheet. Gone once the player is ad-free. */
+/**
+ * Play tab: a "Remove ads" card that opens the purchase sheet. Amber, unlike the game
+ * cards, so it stands out as an offer. Gone once the player is ad-free.
+ */
 export function RemoveAdsCard() {
   const st = useAdFree();
   const flow = useRemoveAdsFlow();
   if (st.adFree || st.provider === 'none') return <>{flow.sheets}</>;
   return (
     <>
-      <Pressable onPress={flow.open} accessibilityRole="button" accessibilityLabel="Remove ads"
-        style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
-        <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 24, padding: 20 }}>
-          <IconBox emoji="🚫" />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white }}>Remove ads</Text>
-            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>One-time purchase. Play without interruptions.</Text>
+      <Pressable onPress={flow.open} accessibilityRole="button" accessibilityLabel={`Remove ads${st.price ? `, ${st.price}` : ''}`}
+        style={({ pressed }) => ({ marginTop: 12, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+        <LinearGradient colors={['rgba(255,181,71,0.22)', 'rgba(255,181,71,0.06)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 14, borderWidth: 1, borderColor: 'rgba(255,181,71,0.5)' }}>
+          <View style={{ width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,181,71,0.18)' }}>
+            <Text style={{ fontSize: 20 }}>🚫</Text>
           </View>
-          <Text style={{ fontSize: 22, color: w(0.55) }}>›</Text>
-        </Card>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: F.displayBold, fontSize: 17, color: C.white }}>Remove ads</Text>
+            <Text style={{ fontFamily: F.body, fontSize: 13, color: w(0.75), marginTop: 2 }}>One-time purchase. No subscription.</Text>
+          </View>
+          <View style={{ borderRadius: 999, backgroundColor: C.amber, paddingHorizontal: 14, paddingVertical: 8 }}>
+            <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: '#3A2400' }}>{st.price ?? 'Go ad-free'}</Text>
+          </View>
+        </LinearGradient>
       </Pressable>
       {flow.sheets}
     </>
