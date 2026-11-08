@@ -328,28 +328,6 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
 }
 
 // ── Profile ────────────────────────────────────────────────────────────────
-function SocialRow({ emoji, label, detail, badge, onPress, last = false }: { emoji: string; label: string; detail: string; badge?: number; onPress: () => void; last?: boolean }) {
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button"
-      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: last ? 0 : 1, borderBottomColor: C.divider, backgroundColor: pressed ? w(0.04) : 'transparent' })}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text style={{ fontSize: 18 }}>{emoji}</Text>
-        <View>
-          <Text style={{ fontFamily: F.bodySemi, fontSize: 15, color: C.white }}>{label}</Text>
-          <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65) }}>{detail}</Text>
-        </View>
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        {!!badge && (
-          <View style={{ minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, backgroundColor: C.coral, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontFamily: F.bodyBold, fontSize: 12, color: C.white }}>{badge}</Text>
-          </View>
-        )}
-        <Text style={{ color: w(0.55), fontSize: 18 }}>›</Text>
-      </View>
-    </Pressable>
-  );
-}
 
 function ProfileTab({ account, best }: { account: Account; best: number }) {
   const c = useSocial();
@@ -358,7 +336,6 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
   const soloBest = Math.max(c?.solo_best ?? 0, best);
   const record = c?.record ?? { wins: 0, losses: 0, draws: 0 };
   const friends = c?.friends ?? 0;
-  const active = c?.active ?? 0;
 
   return (
     <View>
@@ -375,11 +352,6 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
           eliminationWins={eliminationWins} soloBest={soloBest} record={record} onRecord={() => nav.push({ name: 'challenges', tab: 'history' })} />
       </View>
 
-      <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Social</Text>
-      <View style={{ borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' }}>
-        <SocialRow emoji="👥" label="Friends" detail={`${friends} ${friends === 1 ? 'friend' : 'friends'}`} badge={c?.requests} onPress={() => nav.push({ name: 'friends', tab: c?.requests ? 'requests' : 'friends' })} />
-        <SocialRow emoji="⚔️" label="1v1 challenges" detail={`${active} active`} badge={c?.your_turn} onPress={() => nav.push({ name: 'challenges' })} last />
-      </View>
     </View>
   );
 }

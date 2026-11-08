@@ -327,7 +327,6 @@ export function ProfileBody({ avatar, name, place, friends, onFriends, xp, strea
         <Pressable onPress={onFriends} disabled={!onFriends} accessibilityRole={onFriends ? 'button' : undefined} hitSlop={6}
           style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999,
             backgroundColor: pressed ? 'rgba(61,139,255,0.2)' : w(0.06), borderWidth: 1, borderColor: w(0.1) })}>
-          <Text style={{ fontSize: 13 }}>👥</Text>
           <Text style={[{ fontFamily: F.bodySemi, fontSize: 13, color: C.white }, s.tabular]}>{friendsText}</Text>
           {onFriends && <Text style={{ fontFamily: F.bodySemi, fontSize: 13, color: w(0.55) }}>›</Text>}
         </Pressable>

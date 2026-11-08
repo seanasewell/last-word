@@ -118,7 +118,7 @@ function ChallengeCard({ def, value, done }: { def: ChallengeDef; value: number;
   return (
     <View style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 18 }, done && { borderColor: 'rgba(62,230,184,0.4)', backgroundColor: 'rgba(62,230,184,0.07)' }]}>
       <View style={{ width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: done ? 'rgba(62,230,184,0.15)' : w(0.06) }}>
-        <Icon e={done ? '✅' : def.emoji} size={22} />
+        {done ? <Text style={{ fontFamily: F.bodyBold, fontSize: 22, lineHeight: 26, color: C.mint }}>✓</Text> : <Icon e={def.emoji} size={22} />}
       </View>
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
@@ -273,21 +273,15 @@ function Badge({ v, size = 60 }: { v: AchievementView; size?: number }) {
   );
 }
 
-function CheckCircle() {
-  return (
-    <View style={{ position: 'absolute', right: 8, top: 8, width: 22, height: 22, borderRadius: 11, shadowColor: DONE, shadowOpacity: 0.4, shadowRadius: 3 }}>
-      <Svg width={22} height={22} viewBox="0 0 24 24">
-        <Circle cx={12} cy={12} r={12} fill={DONE} />
-        <Path d="M7.4 12.3 10.6 15.4 16.6 9" fill="none" stroke="#FFFFFF" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
-    </View>
-  );
+/** The same check as "Friends ✓". */
+function Check() {
+  return <Text style={{ position: 'absolute', right: 10, top: 6, fontFamily: F.bodyBold, fontSize: 18, lineHeight: 22, color: C.mint }}>✓</Text>;
 }
 
 function AchievementTile({ v }: { v: AchievementView }) {
   return (
     <View accessibilityLabel={`${v.def.name}, ${v.def.xp} XP${v.unlocked ? ', unlocked' : ''}`} style={[s.card, { width: '48.8%', alignItems: 'center', padding: 12, borderRadius: 18 }]}>
-      {v.unlocked && <CheckCircle />}
+      {v.unlocked && <Check />}
       <Badge v={v} size={60} />
       <Text style={{ marginTop: 8, textAlign: 'center', fontFamily: F.bodyBold, fontSize: 14, lineHeight: 18, color: v.unlocked ? C.white : w(0.7) }}>{v.def.name}</Text>
       <Text style={[{ marginTop: 4, fontFamily: F.bodyBold, fontSize: 12, color: C.amber, opacity: v.unlocked ? 1 : 0.7 }, s.tabular]}>{v.def.xp} XP</Text>
