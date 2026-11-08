@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 
 export type Route =
   | { name: 'settings' }
-  | { name: 'friends' }
+  | { name: 'friends'; tab?: 'friends' | 'requests' }
   | { name: 'challenges'; tab?: 'active' | 'history' }
   | { name: 'challenge'; id: string }
   | { name: 'player'; id: string }

@@ -14,7 +14,7 @@ import {
 } from '@/lib/challenges';
 import { engine } from '@/lib/engine';
 import { kv } from '@/lib/kv';
-import { Avatar, Button, Card, s, Sheet, TextField, Tile, toast, useNow } from './kit';
+import { Avatar, Button, Card, s, Segmented, Sheet, TextField, Tile, toast, useNow } from './kit';
 import { nav, inviteTokenFrom } from './nav';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { sfx } from './sound';
@@ -125,7 +125,8 @@ export async function shareFriendInvite(): Promise<string | null> {
 }
 
 // ── Friends ────────────────────────────────────────────────────────────────
-export function FriendsScreen() {
+export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 'requests' }) {
+  const [tab, setTab] = useState<'friends' | 'requests'>(initial);
   const list = useLoad(myFriends, []);
   const [q, setQ] = useState('');
   const [results, setResults] = useState<SearchRow[] | null>(null);
@@ -187,46 +188,59 @@ export function FriendsScreen() {
       {list.error && <ErrorText text={list.error} onRetry={list.reload} />}
       {!list.data && !list.error && <Loading />}
 
-      {incoming.length > 0 && (
-        <>
-          <Eyebrow right={`${incoming.length}`}>Friend requests</Eyebrow>
-          <View style={{ gap: 6 }}>
-            {incoming.map((f) => (
-              <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }} subtitle="Wants to be friends"
-                right={(
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    <SmallButton title="Accept" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => respondFriendRequest(f.user_id, true))} />
-                    <SmallButton title="Decline" variant="ghost" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => respondFriendRequest(f.user_id, false))} />
-                  </View>
-                )} />
-            ))}
-          </View>
-        </>
-      )}
-
       {list.data && (
-        <>
-          <Eyebrow right={friends.length ? `${friends.length}` : undefined}>Your friends</Eyebrow>
-          {friends.length === 0 ? (
-            <Empty emoji="🤝" title="No friends yet" body="Invite friends, or search for players by name to add them." />
-          ) : (
-            <View style={{ gap: 6 }}>
-              {friends.map((f) => <FriendRowView key={f.user_id} f={f} />)}
-            </View>
-          )}
-        </>
+        <View style={{ marginTop: 24 }}>
+          <Segmented value={tab} onChange={setTab} options={[
+            { id: 'friends' as const, label: `Friends${friends.length ? ` · ${friends.length}` : ''}` },
+            { id: 'requests' as const, label: `Requests${incoming.length + outgoing.length ? ` · ${incoming.length + outgoing.length}` : ''}` },
+          ]} />
+        </View>
       )}
 
-      {outgoing.length > 0 && (
-        <>
-          <Eyebrow>Sent requests</Eyebrow>
-          <View style={{ gap: 6 }}>
-            {outgoing.map((f) => (
-              <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }} subtitle="Request sent"
-                right={<SmallButton title="Cancel" variant="ghost" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => removeFriend(f.user_id))} />} />
-            ))}
+      {list.data && tab === 'friends' && (
+        friends.length === 0 ? (
+          <View style={{ marginTop: 12 }}><Empty emoji="🤝" title="No friends yet" body="Invite friends, or search for players by name to add them." /></View>
+        ) : (
+          <View style={{ gap: 6, marginTop: 12 }}>
+            {friends.map((f) => <FriendRowView key={f.user_id} f={f} />)}
           </View>
-        </>
+        )
+      )}
+
+      {list.data && tab === 'requests' && (
+        incoming.length + outgoing.length === 0 ? (
+          <View style={{ marginTop: 12 }}><Empty emoji="📭" title="No friend requests" body="Requests you get and send show up here." /></View>
+        ) : (
+          <>
+            {incoming.length > 0 && (
+              <>
+                <Eyebrow right={`${incoming.length}`}>Received</Eyebrow>
+                <View style={{ gap: 6 }}>
+                  {incoming.map((f) => (
+                    <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }} subtitle="Wants to be friends"
+                      right={(
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          <SmallButton title="Accept" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => respondFriendRequest(f.user_id, true))} />
+                          <SmallButton title="Decline" variant="ghost" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => respondFriendRequest(f.user_id, false))} />
+                        </View>
+                      )} />
+                  ))}
+                </View>
+              </>
+            )}
+            {outgoing.length > 0 && (
+              <>
+                <Eyebrow right={`${outgoing.length}`}>Sent</Eyebrow>
+                <View style={{ gap: 6 }}>
+                  {outgoing.map((f) => (
+                    <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }} subtitle="Request sent"
+                      right={<SmallButton title="Cancel" variant="ghost" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => removeFriend(f.user_id))} />} />
+                  ))}
+                </View>
+              </>
+            )}
+          </>
+        )
       )}
 
     </View>
@@ -946,7 +960,7 @@ export function openNotification(n: { kind: string; challenge_id?: string | null
   // Challenges waiting on you open the list (Accept / Play are there); results open the challenge.
   if (cid && (n.kind === 'challenge_received' || n.kind === 'challenge_accepted' || n.kind === 'challenge_played' || n.kind === 'challenge_expiring')) nav.push({ name: 'challenges' });
   else if (cid) nav.push({ name: 'challenge', id: cid });
-  else if (n.kind === 'friend_request') nav.push({ name: 'friends' });
+  else if (n.kind === 'friend_request') nav.push({ name: 'friends', tab: 'requests' });
   else if (n.actor?.id) nav.push({ name: 'player', id: n.actor.id });
   else nav.push({ name: 'friends' });
 }

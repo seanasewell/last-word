@@ -371,7 +371,7 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
 
       <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Social</Text>
       <View style={{ borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' }}>
-        <SocialRow emoji="👥" label="Friends" detail={`${friends} ${friends === 1 ? 'friend' : 'friends'}`} badge={c?.requests} onPress={() => nav.push({ name: 'friends' })} />
+        <SocialRow emoji="👥" label="Friends" detail={`${friends} ${friends === 1 ? 'friend' : 'friends'}`} badge={c?.requests} onPress={() => nav.push({ name: 'friends', tab: c?.requests ? 'requests' : 'friends' })} />
         <SocialRow emoji="⚔️" label="1v1 challenges" detail={`${active} active`} badge={c?.your_turn} onPress={() => nav.push({ name: 'challenges' })} last />
       </View>
     </View>
@@ -429,7 +429,7 @@ function RoutePage({ route, account }: { route: Route; account: Account }) {
         refreshControl={route.name === 'settings' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
         <Animated.View key={key} entering={FadeIn.duration(180)}>
           {route.name === 'settings' && <SettingsScreen account={account} />}
-          {route.name === 'friends' && <FriendsScreen />}
+          {route.name === 'friends' && <FriendsScreen tab={route.tab} />}
           {route.name === 'challenges' && <ChallengesScreen tab={route.tab} />}
           {route.name === 'player' && <PlayerScreen id={route.id} />}
           {route.name === 'notifications' && <NotificationsScreen />}
