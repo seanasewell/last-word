@@ -4,12 +4,14 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { accounts, type Account } from '@/lib/account';
+import { sendFeedback, type FeedbackKind } from '@/lib/feedback';
 import { myBlocks, unblockPlayer, type BlockedPlayer } from '@/lib/moderation';
 import { PRIVACY_URL, SHOW_DEV_TOOLS, SUPPORT_URL, TERMS_URL } from '@/lib/release';
 import { COUNTRIES, countryByCode } from '@/lib/regions';
 import { scoreWord } from '@/lib/words';
 import { cleanName, DevControls, NAME_MAX, nameError } from './Auth';
-import { Avatar, Button, OptionSheet, s, Sheet, TextField, Toggle } from './kit';
+import { Avatar, Button, OptionSheet, s, Segmented, Sheet, TextField, toast, Toggle } from './kit';
+import { nav } from './nav';
 import { pickPhoto } from './photo';
 import { LevelingGuide } from './Progress';
 import { AdvertisementsSection } from './RemoveAds';
@@ -154,6 +156,10 @@ export function SettingsScreen({ account }: { account: Account }) {
           <MenuLabel emoji="⭐" text="How leveling works" />
           <Text style={{ color: w(0.55) }}>›</Text>
         </Pressable>
+        <Pressable onPress={() => nav.push({ name: 'feedback' })} style={row}>
+          <MenuLabel emoji="💡" text="Send feedback" />
+          <Text style={{ color: w(0.55) }}>›</Text>
+        </Pressable>
         <Pressable onPress={() => { void Linking.openURL(SUPPORT_URL); }} style={row}>
           <MenuLabel emoji="💬" text="Help and support" />
           <Text style={{ color: w(0.55) }}>↗</Text>
@@ -263,5 +269,47 @@ function BlockedPlayers({ open, onClose }: { open: boolean; onClose: () => void 
         ))}
       </ScrollView>
     </Sheet>
+  );
+}
+
+const FEEDBACK_MAX = 2000;
+const FEEDBACK_KINDS: { id: FeedbackKind; label: string }[] = [
+  { id: 'idea', label: '💡 Idea' },
+  { id: 'problem', label: '🐞 Problem' },
+  { id: 'other', label: '💬 Other' },
+];
+const FEEDBACK_HINT: Record<FeedbackKind, string> = {
+  idea: 'What would make Last Word better?',
+  problem: 'What happened? What did you expect instead?',
+  other: 'What’s on your mind?',
+};
+
+/** Settings → Send feedback: a short note to the developer. */
+export function FeedbackScreen() {
+  const [kind, setKind] = useState<FeedbackKind>('idea');
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const ready = text.trim().length > 0 && !busy;
+  const send = async () => {
+    if (!ready) return;
+    setBusy(true);
+    const e = await sendFeedback(kind, text);
+    setBusy(false);
+    if (e) { toast.show(e); return; }
+    nav.pop();
+    toast.success('Thanks! Your feedback was sent.');
+  };
+  return (
+    <View style={{ gap: 14 }}>
+      <Text style={{ fontFamily: F.body, fontSize: 14, lineHeight: 20, color: w(0.75) }}>Ideas, bugs, anything. Every note is read.</Text>
+      <Segmented options={FEEDBACK_KINDS} value={kind} onChange={setKind} />
+      <View>
+        <TextField value={text} onChangeText={(t) => setText(t.slice(0, FEEDBACK_MAX))} multiline textAlignVertical="top"
+          placeholder={FEEDBACK_HINT[kind]} accessibilityLabel="Your feedback" autoFocus
+          style={{ height: 180, borderRadius: 16, fontSize: 16, lineHeight: 22, paddingTop: 14, paddingBottom: 14, letterSpacing: 0 }} />
+        <Text style={[{ alignSelf: 'flex-end', marginTop: 6, fontFamily: F.body, fontSize: 12, color: w(0.5) }, s.tabular]}>{text.length} / {FEEDBACK_MAX}</Text>
+      </View>
+      <Button title={busy ? 'Sending…' : 'Send feedback'} disabled={!ready} onPress={() => void send()} />
+    </View>
   );
 }

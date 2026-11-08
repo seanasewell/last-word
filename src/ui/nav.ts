@@ -10,6 +10,7 @@ export type Route =
   | { name: 'player'; id: string }
   | { name: 'notifications' }
   | { name: 'search' }
+  | { name: 'feedback' }
   | { name: 'invite'; token: string };
 
 let stack: Route[] = [];

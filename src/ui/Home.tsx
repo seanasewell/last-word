@@ -11,7 +11,7 @@ import { countryByCode } from '@/lib/regions';
 import { Avatar, Card, FadeUp, HEADER_SIDE, HeaderLogo, ordinal, s, Screen, Segmented, TopToast, useNow } from './kit';
 import { nav, useNav, type Route } from './nav';
 import { DailyChallenges, LevelCard, RewardsTab, SweepBorder } from './Progress';
-import { SettingsScreen } from './Settings';
+import { FeedbackScreen, SettingsScreen } from './Settings';
 import { SaveProgressNudge } from './SignIn';
 import { ChallengeScreen, ChallengesScreen, FriendsScreen, InviteRecoveryBanner, InviteScreen, NotificationsScreen, PlayerScreen, PlayerSearchScreen, ProfileBody } from './Social';
 import { C, F, w } from './theme';
@@ -369,7 +369,7 @@ function NoticeToast({ text }: { text: string }) {
 // ── Pages over the tabs (Settings, Friends, Challenges…) ───────────────────
 const ROUTE_TITLE: Record<Route['name'], string> = {
   settings: 'Settings', friends: 'Friends', challenges: '1v1 challenges', challenge: '1v1 challenge',
-  player: 'Player', notifications: 'Notifications', invite: 'Invite', search: 'Find players',
+  player: 'Player', notifications: 'Notifications', invite: 'Invite', search: 'Find players', feedback: 'Send feedback',
 };
 
 function RoutePage({ route, account }: { route: Route; account: Account }) {
@@ -398,7 +398,7 @@ function RoutePage({ route, account }: { route: Route; account: Account }) {
         </Animated.View>
       ) : (
       <ScrollView key={key} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 40 }}
-        refreshControl={route.name === 'settings' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
+        refreshControl={route.name === 'settings' || route.name === 'feedback' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
         <Animated.View key={key} entering={FadeIn.duration(180)}>
           {route.name === 'settings' && <SettingsScreen account={account} />}
           {route.name === 'friends' && <FriendsScreen tab={route.tab} />}
@@ -406,6 +406,7 @@ function RoutePage({ route, account }: { route: Route; account: Account }) {
           {route.name === 'player' && <PlayerScreen id={route.id} />}
           {route.name === 'notifications' && <NotificationsScreen />}
           {route.name === 'search' && <PlayerSearchScreen />}
+          {route.name === 'feedback' && <FeedbackScreen />}
           {route.name === 'invite' && <InviteScreen token={route.token} />}
         </Animated.View>
       </ScrollView>

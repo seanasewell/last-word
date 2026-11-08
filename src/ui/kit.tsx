@@ -241,14 +241,16 @@ export const s = StyleSheet.create({
 
 // ── Sheets & controls ──────────────────────────────────────────────────────
 /** Bottom sheet over a dimmed backdrop. */
-// ── Top error banner ───────────────────────────────────────────────────────
+// ── Top banner (errors, and the odd confirmation) ───────────────────────────────────────────────────────
 // toast.show('…') drops a short message in from the top of the screen without moving
 // the player anywhere. It also shows over open sheets.
-let toastState: { text: string; id: number } | null = null;
+let toastState: { text: string; id: number; good: boolean } | null = null;
 let toastSeq = 0;
 const toastSubs = new Set<() => void>();
 export const toast = {
-  show(text: string) { toastState = { text, id: ++toastSeq }; toastSubs.forEach((f) => f()); },
+  show(text: string) { toastState = { text, id: ++toastSeq, good: false }; toastSubs.forEach((f) => f()); },
+  /** A confirmation (green) instead of an error. */
+  success(text: string) { toastState = { text, id: ++toastSeq, good: true }; toastSubs.forEach((f) => f()); },
   clear() { toastState = null; toastSubs.forEach((f) => f()); },
 };
 const subscribeToast = (f: () => void) => { toastSubs.add(f); return () => { toastSubs.delete(f); }; };
@@ -266,7 +268,7 @@ export function TopToast() {
     <Animated.View key={cur.id} entering={SlideInUp.duration(220).easing(Easing.out(Easing.cubic))} exiting={FadeOutUp.duration(160)}
       pointerEvents="box-none" style={{ position: 'absolute', left: 12, right: 12, top: insets.top + 8, zIndex: 100 }}>
       <Pressable onPress={() => toast.clear()} accessibilityRole="alert" accessibilityLiveRegion="polite"
-        style={{ borderRadius: 16, backgroundColor: '#3A1820', borderWidth: 1, borderColor: 'rgba(255,93,115,0.5)', paddingHorizontal: 16, paddingVertical: 12,
+        style={{ borderRadius: 16, backgroundColor: cur.good ? '#123A33' : '#3A1820', borderWidth: 1, borderColor: cur.good ? 'rgba(62,230,184,0.5)' : 'rgba(255,93,115,0.5)', paddingHorizontal: 16, paddingVertical: 12,
           shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8 }}>
         <Text style={{ fontFamily: F.bodySemi, fontSize: 14, color: C.white, textAlign: 'center' }}>{cur.text}</Text>
       </Pressable>
