@@ -1,4 +1,4 @@
-// ── Remove ads: Settings card, purchase sheet, confirmation; simulated ad screen ──
+// ── Remove ads: Play tab and Settings cards, purchase sheet, confirmation; simulated ad screen ──
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -6,7 +6,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { registerSimulatedAdHost } from '@/lib/ads';
 import { purchases, useAdFree } from '@/lib/purchases';
-import { Button, s, Sheet } from './kit';
+import { Button, Card, s, Sheet } from './kit';
 import { C, F, w } from './theme';
 
 const GREEN = '#22A06B';
@@ -28,11 +28,31 @@ function IconBox({ emoji }: { emoji: string }) {
   );
 }
 
+/** The purchase sheet plus its "You're ad-free!" confirmation. `open()` starts the flow. */
+function useRemoveAdsFlow() {
+  const [sheet, setSheet] = useState<'buy' | 'done' | null>(null);
+  const [doneTitle, setDoneTitle] = useState("You're ad-free!");
+  const sheets = (
+    <>
+      <PurchaseSheet open={sheet === 'buy'} onClose={() => setSheet(null)}
+        onSuccess={(restored) => { setDoneTitle(restored ? 'Purchase restored' : "You're ad-free!"); setSheet('done'); }} />
+      <Sheet open={sheet === 'done'} onClose={() => setSheet(null)}>
+        <View style={{ alignItems: 'center', paddingTop: 4 }}>
+          <Text style={{ fontSize: 44 }}>🎉</Text>
+          <Text style={{ marginTop: 8, fontFamily: F.displayBold, fontSize: 22, color: C.white, textAlign: 'center' }}>{doneTitle}</Text>
+          <Text style={[s.body, { textAlign: 'center', marginTop: 6 }]}>All advertisements have been removed. Enjoy uninterrupted gameplay.</Text>
+        </View>
+        <View style={{ marginTop: 20 }}><Button title="Continue" onPress={() => setSheet(null)} /></View>
+      </Sheet>
+    </>
+  );
+  return { open: () => setSheet('buy'), sheets };
+}
+
 /** Profile → Advertisements. Hidden where purchases aren't available at all. */
 export function AdvertisementsSection() {
   const st = useAdFree();
-  const [sheet, setSheet] = useState<'buy' | 'done' | null>(null);
-  const [doneTitle, setDoneTitle] = useState("You're ad-free!");
+  const flow = useRemoveAdsFlow();
   if (st.provider === 'none' && !st.adFree) return null;
 
   const cardStyle = { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, padding: 14, borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder };
@@ -49,7 +69,7 @@ export function AdvertisementsSection() {
           <GreenCheck />
         </View>
       ) : (
-        <Pressable onPress={() => setSheet('buy')} accessibilityRole="button" style={({ pressed }) => [cardStyle, { opacity: pressed ? 0.85 : 1 }]}>
+        <Pressable onPress={flow.open} accessibilityRole="button" style={({ pressed }) => [cardStyle, { opacity: pressed ? 0.85 : 1 }]}>
           <IconBox emoji="🚫" />
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.white }}>Remove ads</Text>
@@ -58,16 +78,30 @@ export function AdvertisementsSection() {
           <Text style={{ fontSize: 20, color: w(0.55) }}>›</Text>
         </Pressable>
       )}
-      <PurchaseSheet open={sheet === 'buy'} onClose={() => setSheet(null)}
-        onSuccess={(restored) => { setDoneTitle(restored ? 'Purchase restored' : "You're ad-free!"); setSheet('done'); }} />
-      <Sheet open={sheet === 'done'} onClose={() => setSheet(null)}>
-        <View style={{ alignItems: 'center', paddingTop: 4 }}>
-          <Text style={{ fontSize: 44 }}>🎉</Text>
-          <Text style={{ marginTop: 8, fontFamily: F.displayBold, fontSize: 22, color: C.white, textAlign: 'center' }}>{doneTitle}</Text>
-          <Text style={[s.body, { textAlign: 'center', marginTop: 6 }]}>All advertisements have been removed. Enjoy uninterrupted gameplay.</Text>
-        </View>
-        <View style={{ marginTop: 20 }}><Button title="Continue" onPress={() => setSheet(null)} /></View>
-      </Sheet>
+      {flow.sheets}
+    </>
+  );
+}
+
+/** Play tab: a "Remove ads" card that opens the purchase sheet. Gone once the player is ad-free. */
+export function RemoveAdsCard() {
+  const st = useAdFree();
+  const flow = useRemoveAdsFlow();
+  if (st.adFree || st.provider === 'none') return <>{flow.sheets}</>;
+  return (
+    <>
+      <Pressable onPress={flow.open} accessibilityRole="button" accessibilityLabel="Remove ads"
+        style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+        <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 24, padding: 20 }}>
+          <IconBox emoji="🚫" />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white }}>Remove ads</Text>
+            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>One-time purchase. Play without interruptions.</Text>
+          </View>
+          <Text style={{ fontSize: 22, color: w(0.55) }}>›</Text>
+        </Card>
+      </Pressable>
+      {flow.sheets}
     </>
   );
 }

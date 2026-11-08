@@ -11,6 +11,7 @@ import { countryByCode } from '@/lib/regions';
 import { Avatar, Card, FadeUp, HEADER_SIDE, HeaderLogo, ordinal, s, Screen, Segmented, TopToast, useNow } from './kit';
 import { nav, useNav, type Route } from './nav';
 import { DailyChallenges, LevelCard, RewardsTab, SweepBorder } from './Progress';
+import { RemoveAdsCard } from './RemoveAds';
 import { FeedbackScreen, SettingsScreen } from './Settings';
 import { SaveProgressNudge } from './SignIn';
 import { ChallengeScreen, ChallengesScreen, FriendsScreen, InviteRecoveryBanner, InviteScreen, NotificationsScreen, PlayerScreen, PlayerSearchScreen, ProfileBody } from './Social';
@@ -135,6 +136,8 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
             <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>Challenge friends to beat your score.</Text>
           </Card>
         </Pressable>
+
+        <RemoveAdsCard />
       </FadeUp>
 
       <FadeUp delay={180} style={{ marginTop: 28 }}><DailyChallenges /></FadeUp>
