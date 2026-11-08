@@ -125,8 +125,8 @@ export async function shareFriendInvite(): Promise<string | null> {
 }
 
 // ── Friends ────────────────────────────────────────────────────────────────
-export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 'requests' }) {
-  const [tab, setTab] = useState<'friends' | 'requests'>(initial);
+export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 'requests' | 'sent' }) {
+  const [tab, setTab] = useState<'friends' | 'requests' | 'sent'>(initial);
   const list = useLoad(myFriends, []);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -171,7 +171,8 @@ export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 
         <View style={{ marginTop: 24, gap: 10 }}>
           <Segmented value={tab} onChange={setTab} options={[
             { id: 'friends' as const, label: `Friends${friendsAll.length ? ` · ${friendsAll.length}` : ''}` },
-            { id: 'requests' as const, label: `Requests${incomingAll.length + outgoingAll.length ? ` · ${incomingAll.length + outgoingAll.length}` : ''}` },
+            { id: 'requests' as const, label: `Requests${incomingAll.length ? ` · ${incomingAll.length}` : ''}` },
+            { id: 'sent' as const, label: `Sent${outgoingAll.length ? ` · ${outgoingAll.length}` : ''}` },
           ]} />
           {tab === 'friends' && friendsAll.length > 0 && (
             <TextField value={q} onChangeText={setQ} placeholder="Search friends" autoCorrect={false} autoCapitalize="none"
@@ -190,39 +191,36 @@ export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 
         )
       )}
 
+      {/* Requests: only ones other players sent you. */}
       {list.data && tab === 'requests' && (
-        incomingAll.length + outgoingAll.length === 0 ? (
-          <View style={{ marginTop: 12 }}><Empty emoji="📭" title="No friend requests" body="Requests you get and send show up here." /></View>
+        incoming.length === 0 ? (
+          <View style={{ marginTop: 12 }}><Empty emoji="📭" title="No friend requests" body="When someone asks to be your friend, it shows up here." /></View>
         ) : (
-          <>
-            {incoming.length > 0 && (
-              <>
-                <Eyebrow right={`${incoming.length}`}>Received</Eyebrow>
-                <View style={{ gap: 6 }}>
-                  {incoming.map((f) => (
-                    <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }} subtitle="Wants to be friends"
-                      right={(
-                        <View style={{ flexDirection: 'row', gap: 6 }}>
-                          <SmallButton title="Decline" variant="ghost" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => respondFriendRequest(f.user_id, false))} />
-                          <SmallButton title="Accept" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => respondFriendRequest(f.user_id, true))} />
-                        </View>
-                      )} />
-                  ))}
-                </View>
-              </>
-            )}
-            {outgoing.length > 0 && (
-              <>
-                <Eyebrow right={`${outgoing.length}`}>Sent</Eyebrow>
-                <View style={{ gap: 6 }}>
-                  {outgoing.map((f) => (
-                    <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }} subtitle="Request sent"
-                      right={<SmallButton title="Cancel" variant="ghost" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => removeFriend(f.user_id))} />} />
-                  ))}
-                </View>
-              </>
-            )}
-          </>
+          <View style={{ gap: 6, marginTop: 12 }}>
+            {incoming.map((f) => (
+              <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }} subtitle="Wants to be friends"
+                right={(
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    <SmallButton title="Decline" variant="ghost" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => respondFriendRequest(f.user_id, false))} />
+                    <SmallButton title="Accept" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => respondFriendRequest(f.user_id, true))} />
+                  </View>
+                )} />
+            ))}
+          </View>
+        )
+      )}
+
+      {/* Sent: requests you've sent that haven't been answered. */}
+      {list.data && tab === 'sent' && (
+        outgoing.length === 0 ? (
+          <View style={{ marginTop: 12 }}><Empty emoji="📤" title="No sent requests" body="Requests you send show up here until they're accepted." /></View>
+        ) : (
+          <View style={{ gap: 6, marginTop: 12 }}>
+            {outgoing.map((f) => (
+              <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }} subtitle="Waiting for them to accept"
+                right={<SmallButton title="Cancel" variant="ghost" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => removeFriend(f.user_id))} />} />
+            ))}
+          </View>
         )
       )}
     </View>
