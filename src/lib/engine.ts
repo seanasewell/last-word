@@ -137,6 +137,7 @@ function friendlyChallengeError(m: string): string {
   if (/waiting/i.test(m)) return "This challenge hasn't been accepted yet.";
   if (/closed|isn't yours|not yours/i.test(m)) return 'This challenge is no longer available.';
   if (/unavailable/i.test(m)) return 'This player is unavailable.';
+  if (/no longer friends/i.test(m)) return "You're no longer friends with this player.";
   return "Couldn't start the challenge. Check your connection and try again.";
 }
 
