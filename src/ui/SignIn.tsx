@@ -88,8 +88,8 @@ export function useLinkFlow() {
       setConflict(null);
       void progress.refresh();
       void social.refresh();
-      if (r.merged) toast.success('Switched. This phone’s progress came with you.');
-      else toast.show('Switched, but this phone’s progress couldn’t be brought over.');
+      if (r.merged) toast.success('Switched. Your guest progress came with you.');
+      else toast.show('Switched, but your guest progress couldn’t be brought over.');
     } else if (r.kind === 'error') setError(r.message);
   };
 
@@ -114,8 +114,8 @@ export function useLinkFlow() {
   const sheet = (
     <Sheet open={!!conflict} onClose={() => { if (!busy) setConflict(null); }} title="You already have a player">
       <Text style={s.body}>{`That ${name} account is already saved to another Last Word player. You can switch to that player in two ways:`}</Text>
-      {point('Switch and merge', 'Adds what you\'ve done on this phone (XP, wins, streak, friends and challenges) to that player. Nothing that player already has is lost.')}
-      {point('Switch without merging', 'Takes you to that player as it is. What you\'ve done on this phone is left behind and can\'t be recovered.')}
+      {point('Switch and merge', 'Adds what you\'ve done with this guest account (XP, wins, streak, friends and challenges) to that player. Nothing that player already has is lost.')}
+      {point('Switch without merging', 'Takes you to that player as it is. What you\'ve done with this guest account is left behind and can\'t be recovered.')}
       {error && conflict && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral }}>{error}</Text>}
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
         <Button title="Cancel" variant="ghost" style={{ flex: 1 }} disabled={busy} onPress={() => setConflict(null)} />
