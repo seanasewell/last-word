@@ -100,7 +100,7 @@ function Floater({ text, onDone }: { text: string; onDone: () => void }) {
     opacity: interpolate(v.value, [0, 0.15, 1], [0, 1, 0]),
     transform: [{ translateY: interpolate(v.value, [0, 1], [6, -46]) }],
   }));
-  return <Animated.Text style={[{ position: 'absolute', right: 12, top: -6, fontFamily: F.display, fontSize: 24, color: C.amber }, st]}>{text}</Animated.Text>;
+  return <Animated.Text style={[{ position: 'absolute', right: 12, top: -6, fontFamily: F.display, fontSize: 24, color: C.mint }, st]}>{text}</Animated.Text>;
 }
 
 function WordInput({ final }: { final: boolean }) {
@@ -139,7 +139,8 @@ function WordInput({ final }: { final: boolean }) {
       haptic.ok();
       sfx.word(r.word.length);
       setFloaters((f) => [...f.slice(-3), { id, text: `+${r.points}` }]);
-      setMsg({ tone: 'ok', id, text: `${r.word.toUpperCase()}  +${r.points}` });
+      // The +points floating up from the field is the confirmation; clear any old message.
+      setMsg(null);
       return;
     }
     haptic.bad();
