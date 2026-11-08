@@ -392,7 +392,14 @@ function RoutePage({ route, account }: { route: Route; account: Account }) {
           style={({ pressed }) => ({ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? w(0.08) : 'transparent' })}>
           <Text style={{ fontSize: 30, color: C.white, marginTop: -4 }}>‹</Text>
         </Pressable>
-        <Text style={[s.h1, { fontSize: 24 }]}>{ROUTE_TITLE[route.name]}</Text>
+        {route.name === 'player' ? (
+          // Someone's profile: just "Back", tucked in next to the chevron (half the usual gap) and tappable too.
+          <Pressable onPress={() => nav.pop()} hitSlop={8} accessibilityElementsHidden importantForAccessibility="no" style={{ marginLeft: -9 }}>
+            <Text style={[s.h1, { fontSize: 24 }]}>Back</Text>
+          </Pressable>
+        ) : (
+          <Text style={[s.h1, { fontSize: 24 }]}>{ROUTE_TITLE[route.name]}</Text>
+        )}
       </View>
       {/* A challenge page has its own scroll and pinned buttons. */}
       {route.name === 'challenge' ? (
