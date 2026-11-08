@@ -883,7 +883,7 @@ export function ChallengeCta() {
   return (
     <Card style={{ padding: 16, borderColor: 'rgba(61,139,255,0.45)', backgroundColor: 'rgba(61,139,255,0.10)' }}>
       <Text style={{ fontFamily: F.displayBold, fontSize: 17, color: C.white, textAlign: 'center' }}>Think a friend can beat you?</Text>
-      <Text style={[sub, { textAlign: 'center', marginTop: 4 }]}>Challenge them to a 1v1. Once they accept, you both play the same new word.</Text>
+      <Text style={[sub, { textAlign: 'center', marginTop: 4 }]}>Challenge them to a 1v1. Once they accept, you both play the same word.</Text>
       <Button title="Challenge a friend ⚔️" style={{ marginTop: 12 }} onPress={() => setPicking(true)} />
       <ChallengePicker open={picking} onClose={() => setPicking(false)}
         onPick={async (to) => {
