@@ -17,7 +17,7 @@ import { kv } from '@/lib/kv';
 import { Avatar, Button, Card, s, Segmented, Sheet, TextField, Tile, toast, useNow } from './kit';
 import { nav, inviteTokenFrom } from './nav';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
-import { sfx } from './sound';
+import { musicEnabled, playResultMusic, sfx } from './sound';
 import { LevelCard, LevelSheet, StreakCard } from './Progress';
 import type { AvatarLike } from './kit';
 import { C, F, w } from './theme';
@@ -743,7 +743,7 @@ function ResultHeader({ d, linkOther = false }: { d: ChallengeDetail; linkOther?
   const other: Person = d.other ?? { id: null, name: 'Deleted player', photo_url: null };
   const win = d.outcome === 'win';
   // Same wording as an elimination win.
-  const title = d.outcome === 'draw' ? "It's a draw" : win ? 'You got the last word! 🎉' : `${other.name} got the last word 😢`;
+  const title = d.outcome === 'draw' ? "It's a draw" : win ? 'You got the last word! 🎉' : `${other.name} got the last word!`;
   const side = (p: Person, score: number | null, lead: boolean, link = false) => (
     <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
       <PersonAvatar p={p} size={64} link={link} />
@@ -828,7 +828,9 @@ export function useChallengeOutcome(challengeId: string): { d: ChallengeDetail |
           if (!live) return;
           if (x.status === 'completed' || (x.i_played && !x.they_played) || i === 5) {
             setD(x);
-            if (x.outcome === 'win') sfx.win(); else if (x.outcome === 'loss') sfx.eliminated();
+            // Same as an elimination match: the win or loss song (or its short jingle with music off).
+            if (x.outcome === 'win') { if (musicEnabled()) playResultMusic('win'); else sfx.win(); }
+            else if (x.outcome === 'loss') { if (musicEnabled()) playResultMusic('loss'); else sfx.eliminated(); }
             void social.refresh();
             return;
           }
