@@ -157,8 +157,7 @@ export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 
   return (
     <View>
       <Card style={{ padding: 20, borderColor: 'rgba(61,139,255,0.45)', backgroundColor: 'rgba(61,139,255,0.12)' }}>
-        <Text style={{ fontSize: 28 }}>👋</Text>
-        <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white, marginTop: 6 }}>Invite friends to play</Text>
+        <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white }}>Invite friends to play 👋</Text>
         <Text style={[s.body, { marginTop: 4, fontSize: 14 }]}>Bring your friends to Last Word and challenge them to beat your score.</Text>
         <Button title="Invite friends" style={{ marginTop: 14 }} onPress={() => void invite()} />
       </Card>
