@@ -202,6 +202,7 @@ class ProgressStore {
   }
 
   private again = false;
+  private inflightAt = 0;
 
   /**
    * Fetch the latest progress from the server. A call made while a fetch is already
@@ -209,7 +210,9 @@ class ProgressStore {
    */
   refresh(): Promise<void> {
     if (!this.id) return Promise.resolve();
-    if (this.inflight) { this.again = true; return this.inflight; }
+    // A fetch that's been stuck for 5+ seconds (bad connection) doesn't block new ones.
+    if (this.inflight && Date.now() - this.inflightAt < 5000) { this.again = true; return this.inflight; }
+    this.inflightAt = Date.now();
     this.inflight = (async () => {
       try {
         const { data, error } = await supabase.rpc('my_progress', { p_tz: timeZone() });
