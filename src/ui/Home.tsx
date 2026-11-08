@@ -51,9 +51,6 @@ function TabBar({ tab, onChange, account }: { tab: Tab; onChange: (t: Tab) => vo
 
 const BELL_SIZE = 40;
 
-/** The elimination card's see-through blue as it looks over the screen's background, for the avatar rings. */
-const MATCH_FACTS = [['👨', '6 players'], ['🕐', '5 rounds · 60 seconds each']] as const;
-
 /** Notification bell with an unread dot (Play tab, top right). */
 function Bell() {
   const c = useSocial();
@@ -95,15 +92,7 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Text style={{ fontFamily: F.displayBold, fontSize: 22, color: C.white }}>Elimination</Text>
             </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 6, rowGap: 2, marginTop: 6 }}>
-              {MATCH_FACTS.map(([e, t]) => (
-                <View key={t} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={{ fontSize: 13 }}>{e}</Text>
-                  <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75) }}>{t}</Text>
-                </View>
-              ))}
-            </View>
-            <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.75), marginTop: 4 }}>Lowest score of each round is out.</Text>
+            <Text style={{ fontFamily: F.body, fontSize: 14, lineHeight: 20, color: w(0.75), marginTop: 6 }}>6 players • 5 rounds • 60 seconds each. Lowest score after each round is out.</Text>
             <View style={{ alignSelf: 'flex-start', marginTop: 16, backgroundColor: C.primary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 9 }}>
               <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>Find a match →</Text>
             </View>
