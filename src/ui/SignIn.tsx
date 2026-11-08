@@ -4,9 +4,11 @@ import React, { useEffect, useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 
 import { accounts, type Account } from '@/lib/account';
+import { social } from '@/lib/challenges';
 import { kv } from '@/lib/kv';
+import { progress } from '@/lib/progress';
 import { canUseApple, type Provider, type SocialResult } from '@/lib/social';
-import { Button, Card, FadeUp, s, Sheet } from './kit';
+import { Button, Card, FadeUp, s, Sheet, toast } from './kit';
 import { C, F, w } from './theme';
 
 export const PROVIDER_NAME: Record<Provider, string> = { apple: 'Apple', google: 'Google' };
@@ -59,7 +61,7 @@ export function ProviderButtons({ onPick, busy }: { onPick: (p: Provider) => voi
 
 /**
  * Link flow for guests, with the "that account already has a player" case:
- * offer to switch to the saved player (this phone's guest is left behind).
+ * offer to switch to the saved player, bringing this phone's guest progress along.
  */
 export function useLinkFlow() {
   const [busy, setBusy] = useState(false);
@@ -80,19 +82,24 @@ export function useLinkFlow() {
     const p = conflict;
     if (!p) return;
     setBusy(true); setError(null);
-    const r = await accounts.signIn(p);
+    const r = await accounts.switchAndMerge(p);
     setBusy(false);
-    if (r.kind === 'ok') setConflict(null);
-    else if (r.kind === 'error') setError(r.message);
+    if (r.kind === 'ok') {
+      setConflict(null);
+      void progress.refresh();
+      void social.refresh();
+      if (r.merged) toast.success('Switched. This phone’s progress came with you.');
+      else toast.show('Switched, but this phone’s progress couldn’t be brought over.');
+    } else if (r.kind === 'error') setError(r.message);
   };
 
   const sheet = (
     <Sheet open={!!conflict} onClose={() => { if (!busy) setConflict(null); }} title="You already have a player">
-      <Text style={s.body}>{`That ${conflict ? PROVIDER_NAME[conflict] : ''} account is already saved to another Last Word player. Switch to that player? This phone's guest progress will be lost.`}</Text>
+      <Text style={s.body}>{`That ${conflict ? PROVIDER_NAME[conflict] : ''} account already has a Last Word player. Switch to it and bring this phone's progress with you: your XP, wins, streak, friends and challenges.`}</Text>
       {error && conflict && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral }}>{error}</Text>}
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
         <Button title="Cancel" variant="ghost" style={{ flex: 1 }} disabled={busy} onPress={() => setConflict(null)} />
-        <Button title={busy ? 'Switching…' : 'Switch'} style={{ flex: 1 }} disabled={busy} onPress={switchTo} />
+        <Button title={busy ? 'Switching…' : 'Switch and merge'} style={{ flex: 1 }} disabled={busy} onPress={switchTo} />
       </View>
     </Sheet>
   );

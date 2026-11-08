@@ -241,6 +241,35 @@ class AccountStore {
     return r;
   }
 
+  /**
+   * A guest picked an Apple/Google account that already has a player: switch to that
+   * player and bring this guest's progress, results, friends and challenges along.
+   * `merged` is false if the switch worked but the guest couldn't be merged.
+   */
+  async switchAndMerge(p: Provider): Promise<SocialResult & { merged?: boolean }> {
+    // While still the guest: a one-time ticket that proves this phone owned it.
+    let ticket: string | null = null;
+    try {
+      const { data } = await supabase.rpc('guest_merge_ticket');
+      ticket = typeof data === 'string' ? data : null;
+    } catch {
+      ticket = null;
+    }
+    const r = await signInWithProvider(p);
+    if (r.kind !== 'ok') return r;
+    let merged = false;
+    if (ticket) {
+      try {
+        const { error } = await supabase.rpc('merge_guest', { p_token: ticket });
+        merged = !error;
+      } catch {
+        merged = false;
+      }
+    }
+    await this.refresh().catch(() => {});
+    return { ...r, merged };
+  }
+
   /** Sign out of a saved (Apple/Google) player. Guests can't sign out: they'd lose everything. */
   async signOut(): Promise<void> {
     if (!this.state.account?.provider) return;

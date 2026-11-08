@@ -179,7 +179,7 @@ export function AuthFlow() {
           <ProviderButtons busy={busy} onPick={(p) => { void signIn(p); }} />
           <Button title={starting || waiting ? 'Starting…' : 'Play as a guest'} variant="ghost" disabled={busy} onPress={guest} />
           <Text style={{ textAlign: 'center', fontFamily: F.body, fontSize: 12, lineHeight: 17, color: w(0.6) }}>
-            Sign in to keep your progress on any phone. By continuing, you agree to our{' '}
+            Played before? Sign in with the same account to pick up where you left off. By continuing, you agree to our{' '}
             <Text onPress={() => { void Linking.openURL(TERMS_URL); }} style={{ color: w(0.85), textDecorationLine: 'underline' }}>Terms of use</Text> and{' '}
             <Text onPress={() => { void Linking.openURL(PRIVACY_URL); }} style={{ color: w(0.85), textDecorationLine: 'underline' }}>Privacy policy</Text>.
           </Text>
