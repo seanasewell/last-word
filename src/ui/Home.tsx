@@ -123,7 +123,8 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
           <Card style={{ borderRadius: 24, padding: 20 }}>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12 }}>
               <Text style={{ fontFamily: F.displayBold, fontSize: 20, color: C.white }}>Solo challenge</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+              {/* Best sits on the right edge of the card. */}
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginLeft: 'auto' }}>
                 <Text style={s.eyebrow}>Best</Text>
                 <Text style={[{ fontFamily: F.display, fontSize: 18, color: C.amber }, s.tabular]}>{best}</Text>
               </View>
