@@ -5,6 +5,8 @@
 import { decode } from 'base64-arraybuffer';
 
 import { kv } from './kv';
+import { purchases } from './purchases';
+import { unregisterPush } from './push';
 import { linkProvider, revokeApple, signInWithProvider, type Provider, type SocialResult } from './social';
 import { supabase } from './supabase';
 
@@ -69,6 +71,37 @@ function providerOf(user: { identities?: { provider: string }[]; app_metadata?: 
 // Onboarding is done once there's a name (location isn't asked for).
 const isComplete = (a: Account) => !!a.name;
 
+/** The last copy of the signed-in player, for launching without a connection. */
+const ACCOUNT_CACHE = 'lw.account.cache';
+function readCachedAccount(id: string): Account | null {
+  try {
+    const a = JSON.parse(kv.get(ACCOUNT_CACHE) || 'null') as Account | null;
+    return a && a.id === id ? a : null;
+  } catch {
+    return null;
+  }
+}
+/**
+ * Forget a player on this phone after sign-out or deletion: the cached copy, Remove ads
+ * answer and per-player keys. A signed-out (saved) player keeps their best score cached.
+ */
+function clearLocalPlayer(id: string, opts: { keepBest?: boolean } = {}) {
+  kv.remove(ACCOUNT_CACHE);
+  purchases.forget();
+  kv.keys().filter((k) => k.endsWith(`.${id}`) && !(opts.keepBest && k === `lw.best.${id}`)).forEach((k) => kv.remove(k));
+}
+
+/** True only when the session is really gone (not a network failure). */
+function isSignedOutError(e: { name?: string; status?: number }): boolean {
+  return e.name === 'AuthSessionMissingError' || e.status === 401 || e.status === 403;
+}
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
 /** Turn Supabase errors into short, player-facing messages. */
 function friendly(message: string | undefined): string {
   const m = (message ?? '').toLowerCase();
@@ -89,29 +122,49 @@ class AccountStore {
   getState = () => this.state;
   private set(p: Partial<AuthState>) { this.state = { ...this.state, ...p }; this.listeners.forEach((l) => l()); }
 
-  /** Restore the saved session at launch. */
+  /**
+   * Restore the saved session at launch. If the server can't be reached (or takes over
+   * 8 seconds), the last copy of the player saved on this phone is shown instead, so a
+   * bad connection never looks like being signed out.
+   */
   async load(): Promise<void> {
     try {
       const { data } = await supabase.auth.getSession();
-      if (data.session) await this.refresh();
+      const user = data.session?.user;
+      if (user) {
+        try {
+          await withTimeout(this.refresh(), 8000);
+        } catch {
+          const cached = readCachedAccount(user.id);
+          if (cached) this.set({ account: cached, onboarding: !isComplete(cached) });
+        }
+      }
     } catch {
-      // Offline or misconfigured: fall through to the sign-in screens.
+      // Storage unreadable: fall through to the sign-in screens.
     }
     this.set({ ready: true });
   }
 
-  /** Re-read the signed-in player's profile and results from the server. */
+  /**
+   * Re-read the signed-in player's profile and results from the server. Only a real
+   * sign-out clears the player; any other failure throws and leaves things as they were.
+   */
   async refresh(): Promise<void> {
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr && !isSignedOutError(userErr)) throw userErr;
     const user = userData.user;
     if (!user) { this.set({ account: null, onboarding: false }); return; }
 
-    let { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    const found = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    if (found.error) throw found.error;
+    let profile = found.data;
     if (!profile) {
       const created = await supabase.from('profiles').insert({ id: user.id }).select('*').single();
+      if (created.error) throw created.error;
       profile = created.data;
     }
-    const { data: results } = await supabase.from('match_results').select('won, played_at').eq('user_id', user.id);
+    const { data: results, error: resultsErr } = await supabase.from('match_results').select('won, played_at').eq('user_id', user.id);
+    if (resultsErr) throw resultsErr;
 
     const winsByDay: Record<string, number> = {};
     const winsByWeek: Record<string, number> = {};
@@ -140,6 +193,7 @@ class AccountStore {
       soloBest,
       provider: user.is_anonymous ? null : providerOf(user),
     };
+    kv.set(ACCOUNT_CACHE, JSON.stringify(account));
     this.set({ account, onboarding: !isComplete(account) });
   }
 
@@ -208,8 +262,8 @@ class AccountStore {
     if (a.provider === 'apple') await revokeApple();
     const { error } = await supabase.rpc('delete_account');
     if (error) return "Couldn't delete the account. Try again.";
-    kv.remove(`lw.best.${a.id}`);
     await supabase.auth.signOut().catch(() => {});
+    clearLocalPlayer(a.id);
     this.set({ account: null, onboarding: false });
     return null;
   }
@@ -272,8 +326,11 @@ class AccountStore {
 
   /** Sign out of a saved (Apple/Google) player. Guests can't sign out: they'd lose everything. */
   async signOut(): Promise<void> {
-    if (!this.state.account?.provider) return;
+    const a = this.state.account;
+    if (!a?.provider) return;
+    await unregisterPush();
     await supabase.auth.signOut().catch(() => {});
+    clearLocalPlayer(a.id, { keepBest: true });
     this.set({ account: null, onboarding: false });
   }
 

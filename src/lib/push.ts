@@ -6,7 +6,7 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 
-import { registerPushToken, social } from './challenges';
+import { registerPushToken, social, unregisterPushToken } from './challenges';
 
 type N = typeof import('expo-notifications');
 let mod: N | null | undefined;
@@ -25,6 +25,15 @@ function notifications(): N | null {
 }
 
 let registeredFor: string | null = null;
+let registeredToken: string | null = null;
+
+/** Signing out: stop sending this player's pushes to this phone (call while still signed in). */
+export async function unregisterPush(): Promise<void> {
+  const t = registeredToken;
+  registeredFor = null;
+  registeredToken = null;
+  if (t) await unregisterPushToken(t).catch(() => {});
+}
 
 /** Ask once (after sign-in) and register this phone for the signed-in player. */
 export async function registerForPush(userId: string): Promise<void> {
@@ -41,6 +50,7 @@ export async function registerForPush(userId: string): Promise<void> {
     const { data } = await n.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
     await registerPushToken(data, Platform.OS);
     registeredFor = userId;
+    registeredToken = data;
   } catch { /* push stays off; the in-app bell still works */ }
 }
 

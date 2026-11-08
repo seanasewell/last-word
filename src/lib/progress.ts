@@ -194,6 +194,8 @@ class ProgressStore {
   use(playerId: string) {
     if (playerId === this.id) return;
     this.id = playerId;
+    this.inflight = null;
+    this.again = false;
     let cached: ProgressState | null = null;
     try { cached = JSON.parse(kv.get(cacheKey(playerId)) || 'null'); } catch { cached = null; }
     this.state = cached ? { ...blank(), ...cached } : blank();
@@ -213,10 +215,12 @@ class ProgressStore {
     // A fetch that's been stuck for 5+ seconds (bad connection) doesn't block new ones.
     if (this.inflight && Date.now() - this.inflightAt < 5000) { this.again = true; return this.inflight; }
     this.inflightAt = Date.now();
+    const forId = this.id;
     this.inflight = (async () => {
       try {
         const { data, error } = await supabase.rpc('my_progress', { p_tz: timeZone() });
-        if (error || !data) return;
+        // Switched player while this was loading: the answer belongs to the old one.
+        if (error || !data || forId !== this.id) return;
         const d = data as ServerProgress;
         this.commit({
           xp: d.xp ?? 0, stats: { ...emptyStats(), ...(d.stats ?? {}) }, days: d.days ?? [],
@@ -263,8 +267,10 @@ class ProgressStore {
 
   /** Take (and clear) the waiting pop-up. Null when there's nothing to show. */
   async takeCelebration(): Promise<Celebration | null> {
+    const forId = this.id;
     try {
       const { data, error } = await supabase.rpc('take_celebration');
+      if (forId !== this.id) return null;
       this.commit({ ...this.state, pending: null });
       if (error || !data) return null;
       const c = toCelebration(data as ServerProgress['pending']);

@@ -168,6 +168,7 @@ export async function markNotificationsRead(ids?: number[]): Promise<void> {
   await call('mark_notifications_read', { p_ids: ids ?? null }); void social.refresh();
 }
 export const registerPushToken = (token: string, platform: string) => call('register_push_token', { p_token: token, p_platform: platform });
+export const unregisterPushToken = (token: string) => call('unregister_push_token', { p_token: token });
 
 // ── Display helpers ──
 export function timeLeft(iso: string, now = Date.now()): string {

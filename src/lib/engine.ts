@@ -127,6 +127,8 @@ interface Online {
   flushScheduled: boolean;
   choice: 'none' | 'spectate';
   done: boolean;
+  /** When the server last answered (to give up instead of freezing if it stops). */
+  lastOk: number;
   /** Last round whose XP has been loaded. */
   scoredRound?: number;
 }
@@ -405,12 +407,18 @@ export class GameEngine {
   /** Send a solo word to the server; if the server turns it down, take it back. */
   private sendSoloWord(solo: NonNullable<GameEngine['solo']>, word: string) {
     const job = (async () => {
+      // Only an explicit "no" from the server takes a word back. A network failure (the rpc
+      // reports it as an error, it doesn't throw) is tried once more, then the word stays.
       let ok = true;
-      try {
-        const { data, error } = await supabase.rpc('solo_submit', { p_game: solo.id, p_word: word });
-        ok = !error && !!data && (data as { ok: boolean }).ok;
-      } catch {
-        ok = true; // network hiccup: keep it on screen; the server's score is final at the end
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const { data, error } = await supabase.rpc('solo_submit', { p_game: solo.id, p_word: word });
+          if (data) { ok = (data as { ok: boolean }).ok !== false; break; }
+          if (error && !/fetch|network|timed? ?out|abort/i.test(error.message)) { ok = false; break; }
+        } catch {
+          // network hiccup: fall through to the retry
+        }
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 700));
       }
       if (ok || this.solo !== solo) return;
       const s = this.state;
@@ -574,7 +582,7 @@ export class GameEngine {
       this.set({ mode: 'multi', challenge: null, matchId: newId(), round: 0, source: '', usedSources: [], players: [], winnerId: null, lastElimination: null, spectating: false, awaitingChoice: false, accepting: false, serverId: data as string });
       this.online = {
         matchId: data as string, myPid: '', offset: 0, bestRtt: Infinity, snap: null, round: 0,
-        extras: new Map(), queue: [], flushScheduled: false, choice: 'none', done: false,
+        extras: new Map(), queue: [], flushScheduled: false, choice: 'none', done: false, lastOk: Date.now(),
       };
       this.set({ serverId: data as string });
       void this.poll(this.token, this.online);
@@ -597,7 +605,7 @@ export class GameEngine {
       if (error || !data) { this.connectionFailed(t); return; }
       this.online = {
         matchId: data as string, myPid: '', offset: 0, bestRtt: Infinity, snap: null, round: 0,
-        extras: new Map(), queue: [], flushScheduled: false, choice: 'none', done: false,
+        extras: new Map(), queue: [], flushScheduled: false, choice: 'none', done: false, lastOk: Date.now(),
       };
       this.set({ serverId: data as string });
       void this.poll(t, this.online);
@@ -621,11 +629,15 @@ export class GameEngine {
         if (rtt <= o.bestRtt + 40) o.offset = parseTs(snap.server_now) - (t0 + t1) / 2;
         o.bestRtt = Math.min(o.bestRtt * 1.05, rtt);
         o.snap = snap;
+        o.lastOk = t1;
         delay = this.render(o);
       }
     } catch {
       // Network hiccup: try again shortly.
     }
+    // No answer from the server for 30 seconds (offline, or the match is gone): back to the
+    // menu with a message rather than a frozen round.
+    if (!o.done && Date.now() - o.lastOk > 30_000) { o.done = true; this.connectionFailed(t); return; }
     if (!o.done) this.after(delay, () => { void this.poll(t, o); });
   }
 

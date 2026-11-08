@@ -45,7 +45,10 @@ function admobProvider(): AdProvider | null {
   let loaded = false;
   let loading = false;
 
-  /** Consent first (only asks where required, e.g. the EEA and UK), then start the SDK. */
+  /**
+   * Consent first (only asks where required, e.g. the EEA and UK), then start the SDK.
+   * A failed attempt (e.g. offline) is tried again next time instead of turning ads off for the session.
+   */
   const init = () => (ready ??= (async () => {
     try {
       const info = await AdsConsent.gatherConsent();
@@ -54,7 +57,10 @@ function admobProvider(): AdProvider | null {
       personalized = !!choices?.selectPersonalisedAds;
       await mobileAds().initialize();
       return true;
-    } catch { return false; }
+    } catch {
+      ready = null;
+      return false;
+    }
   })());
 
   return {
@@ -118,7 +124,7 @@ const provider: AdProvider = admobProvider() ?? (ALLOW_SIMULATION ? simulatedPro
 const COUNT_KEY = 'lw.ads.count';
 const SEEN_KEY = 'lw.ads.counted';
 const launchedAt = Date.now();
-let showing = false;
+let showing: Promise<void> | null = null;
 const listeners = new Set<() => void>();
 let launchDelayOff = false;
 let snapshot = { count: 0, provider: provider.kind };
@@ -147,17 +153,21 @@ export const ads = {
    * Leaving a results screen: show an ad if one is due and ready. Never waits for an
    * ad to load; if none is ready the player carries on and the next exit tries again.
    */
-  async maybeShow(): Promise<void> {
-    if (showing || purchases.get().adFree) return;
-    if (Number(kv.get(COUNT_KEY) || 0) < GAMES_PER_AD) return;
-    if (!launchDelayOff && Date.now() - launchedAt < NO_AD_AFTER_LAUNCH_MS) return;
-    if (!provider.isReady()) { provider.preload(); return; }
-    showing = true;
-    try {
-      if (await provider.show()) { kv.set(COUNT_KEY, '0'); emit(); }
-    } finally {
-      showing = false;
-    }
+  maybeShow(): Promise<void> {
+    // An ad already on screen: wait for it to close rather than carrying on behind it.
+    if (showing) return showing;
+    if (purchases.get().adFree) return Promise.resolve();
+    if (Number(kv.get(COUNT_KEY) || 0) < GAMES_PER_AD) return Promise.resolve();
+    if (!launchDelayOff && Date.now() - launchedAt < NO_AD_AFTER_LAUNCH_MS) return Promise.resolve();
+    if (!provider.isReady()) { provider.preload(); return Promise.resolve(); }
+    showing = (async () => {
+      try {
+        if (await provider.show()) { kv.set(COUNT_KEY, '0'); emit(); }
+      } finally {
+        showing = null;
+      }
+    })();
+    return showing;
   },
 
   /** Load early on launch if an ad is already due. */

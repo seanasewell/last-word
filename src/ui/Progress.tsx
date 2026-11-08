@@ -513,8 +513,16 @@ let showCelebration: ((c: Celebration, then: () => void) => void) | null = null;
  * Leaving a finished game's results: celebrations first, then an interstitial if one is
  * due (every 3 completed games, never for ad-free players), then the action.
  */
+// One exit at a time: a second tap (or a second button) while the first is still
+// showing a celebration or an ad is ignored, so only one game or screen starts.
+let leaving = false;
 export function afterGame(action: () => void) {
-  afterCelebration(() => { void ads.maybeShow().finally(action); });
+  if (leaving) return;
+  leaving = true;
+  // Never stay locked if something on the way out goes wrong.
+  const unlock = setTimeout(() => { leaving = false; }, 60_000);
+  const done = () => { clearTimeout(unlock); leaving = false; action(); };
+  afterCelebration(() => { void ads.maybeShow().catch(() => {}).finally(done); });
 }
 
 export function afterCelebration(action: () => void) {

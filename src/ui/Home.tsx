@@ -234,7 +234,7 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
   const myWinsLocal = winsFor(account, period);
   useEffect(() => {
     let live = true;
-    fetchModeLeaderboard(mode, 'world', period)
+    fetchModeLeaderboard(mode, period)
       .then((data) => { if (live) { setBoard({ key: `${mode}-${period}`, data }); setError(null); } })
       .catch(() => { if (live) setError("Couldn't load rankings. Pull down to try again."); });
     return () => { live = false; };

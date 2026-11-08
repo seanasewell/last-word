@@ -28,7 +28,7 @@ export interface AdFreeState {
 
 interface Provider {
   kind: AdFreeState['provider'];
-  start(userId: string | null): Promise<{ adFree: boolean; price: string | null }>;
+  start(userId: string | null, hadAdFree?: boolean): Promise<{ adFree: boolean; price: string | null }>;
   purchase(): Promise<PurchaseResult>;
   restore(): Promise<PurchaseResult & { adFree?: boolean }>;
 }
@@ -53,13 +53,17 @@ function storeProvider(): Provider | null {
   const owns = (info: { entitlements: { active: Record<string, unknown> } }) => !!info.entitlements.active[AD_FREE_ENTITLEMENT];
   return {
     kind: 'store',
-    async start(userId) {
+    async start(userId, hadAdFree) {
       if (!configured) { P.configure({ apiKey: key, appUserID: userId ?? undefined }); configured = true; }
       else if (userId) await P.logIn(userId).catch(() => {});
-      const [info, products] = await Promise.all([
+      const [first, products] = await Promise.all([
         P.getCustomerInfo(),
         P.getProducts([REMOVE_ADS_PRODUCT_ID], P.PRODUCT_CATEGORY.NON_SUBSCRIPTION).catch(() => []),
       ]);
+      let info = first;
+      // This phone was ad-free under the previous player (e.g. a guest that switched to a saved
+      // player): quietly sync the store receipt so the purchase follows them.
+      if (hadAdFree && !owns(info)) info = await P.syncPurchasesForResult().then((r) => r.customerInfo).catch(() => info);
       product = products[0] ?? null;
       return { adFree: owns(info), price: product?.priceString ?? null };
     },
@@ -126,9 +130,10 @@ export const purchases = {
   async start(userId: string | null) {
     if (!provider) return;
     // Show the last verified answer straight away (store provider only), then ask the store again.
-    if (provider.kind === 'store' && kv.get(CACHE_KEY) === '1') set({ adFree: true });
+    const hadAdFree = provider.kind === 'store' && kv.get(CACHE_KEY) === '1';
+    if (hadAdFree) set({ adFree: true });
     try {
-      const r = await provider.start(userId);
+      const r = await provider.start(userId, hadAdFree);
       set({ adFree: r.adFree, price: r.price ?? state.price });
       if (provider.kind === 'store') kv.set(CACHE_KEY, r.adFree ? '1' : '0');
     } catch { /* offline: keep the cached answer */ }
@@ -150,6 +155,12 @@ export const purchases = {
     set({ busy: false, ...(r.kind === 'ok' && r.adFree ? { adFree: true } : {}) });
     if (r.kind === 'ok' && provider.kind === 'store') kv.set(CACHE_KEY, r.adFree ? '1' : '0');
     return r;
+  },
+
+  /** Signed out or deleted: forget the cached Remove ads answer (the next player's is checked fresh). */
+  forget() {
+    kv.remove(CACHE_KEY);
+    set({ adFree: false });
   },
 
   /** Developer: forget a simulated purchase. */
