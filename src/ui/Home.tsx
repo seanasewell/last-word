@@ -10,7 +10,7 @@ import { fetchModeLeaderboard, type Leaderboard, type RankEntry, type RankMode, 
 import { countryByCode } from '@/lib/regions';
 import { Avatar, Card, FadeUp, HEADER_SIDE, HeaderLogo, ordinal, s, Screen, Segmented, TopToast, useNow } from './kit';
 import { nav, useNav, type Route } from './nav';
-import { DailyChallenges, LevelCard, RewardsTab, SectionHead, SweepBorder } from './Progress';
+import { DailyChallenges, LevelRing, RewardsTab, SectionHead, SweepBorder } from './Progress';
 import { RemoveAdsCard } from './RemoveAds';
 import { FeedbackScreen, SettingsScreen } from './Settings';
 import { SaveProgressNudge } from './SignIn';
@@ -50,7 +50,6 @@ function TabBar({ tab, onChange, account }: { tab: Tab; onChange: (t: Tab) => vo
 }
 
 const BELL_SIZE = 40;
-const BELL_GAP = HEADER_SIDE - BELL_SIZE;
 
 /** The elimination card's see-through blue as it looks over the screen's background, for the avatar rings. */
 const MATCH_FACTS = [['👨', '6 players'], ['🕐', '5 rounds · 60 seconds each']] as const;
@@ -77,13 +76,14 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
   const yourTurn = c?.your_turn ?? 0;
   return (
     <View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: BELL_GAP, paddingTop: 8 }}>
+      {/* Level ring · logo (centered) · bell */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8 }}>
+        <View style={{ width: HEADER_SIDE, alignItems: 'flex-start' }}><LevelRing /></View>
         <HeaderLogo />
-        <Bell />
+        <View style={{ width: HEADER_SIDE, alignItems: 'flex-end' }}><Bell /></View>
       </View>
 
-      <FadeUp delay={60} style={{ marginTop: 24 }}><LevelCard /></FadeUp>
-      <FadeUp delay={90}><RemoveAdsCard /></FadeUp>
+      <FadeUp delay={60} style={{ marginTop: 12 }}><RemoveAdsCard /></FadeUp>
       <SaveProgressNudge account={account} />
       <InviteRecoveryBanner />
 

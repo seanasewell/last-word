@@ -16,7 +16,7 @@ import {
   type AchievementView, type Celebration, type ChallengeDef, type ProgressState,
 } from '@/lib/progress';
 import { ads } from '@/lib/ads';
-import { Button, s, Segmented, useNow } from './kit';
+import { Button, s, Segmented, Sheet, useNow } from './kit';
 import { C, F, w } from './theme';
 
 export function useProgress(): ProgressState {
@@ -92,12 +92,12 @@ export function LevelBadge({ level, size }: { level: number; size: number }) {
 
 // ── Level card ─────────────────────────────────────────────────────────────
 /** Your level, or another player's when `xp` is given. */
-export function LevelCard({ large = false, xp }: { large?: boolean; xp?: number }) {
+export function LevelCard({ large = false, xp, onPress }: { large?: boolean; xp?: number; onPress?: () => void }) {
   const p = useProgress();
   const total = xp ?? p.xp;
   const l = levelFromXp(total);
   const max = l.need === 0;
-  return (
+  const card = (
     <View style={[s.card, { borderRadius: 24, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
       <LevelBadge level={l.level} size={large ? 64 : 48} />
       <View style={{ flex: 1 }}>
@@ -108,6 +108,80 @@ export function LevelCard({ large = false, xp }: { large?: boolean; xp?: number 
         <View style={{ marginTop: 8 }}><Bar pct={max ? 1 : l.into / l.need} h={large ? 8 : 6} /></View>
         <Text style={{ marginTop: 6, fontFamily: F.body, fontSize: 12, color: w(0.7) }}>{max ? `Max level · ${fmt(total)} XP` : `${fmt(l.toNext)} XP to level ${l.level + 1}`}</Text>
       </View>
+    </View>
+  );
+  if (!onPress) return card;
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityHint="Shows every level"
+      style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>{card}</Pressable>
+  );
+}
+
+/**
+ * Play tab header: your level badge inside a ring that fills as you earn XP toward
+ * the next level. Tap for the level sheet.
+ */
+export function LevelRing({ size = 46 }: { size?: number }) {
+  const p = useProgress();
+  const [open, setOpen] = useState(false);
+  const l = levelFromXp(p.xp);
+  const pct = l.need === 0 ? 1 : Math.max(0, Math.min(1, l.into / l.need));
+  const stroke = 3.5;
+  const r = (size - stroke) / 2;
+  const len = 2 * Math.PI * r;
+  return (
+    <>
+      <Pressable onPress={() => setOpen(true)} hitSlop={8} accessibilityRole="button"
+        accessibilityLabel={`Level ${l.level}, ${l.title}. ${l.need === 0 ? 'Max level' : `${fmt(l.toNext)} XP to level ${l.level + 1}`}`}
+        style={({ pressed }) => ({ width: size, height: size, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pressed ? 0.94 : 1 }] })}>
+        <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+          <Circle cx={size / 2} cy={size / 2} r={r} stroke={w(0.14)} strokeWidth={stroke} fill="none" />
+          <Circle cx={size / 2} cy={size / 2} r={r} stroke={C.primary} strokeWidth={stroke} fill="none" strokeLinecap="round"
+            strokeDasharray={`${len} ${len}`} strokeDashoffset={len * (1 - pct)} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+        </Svg>
+        <LevelBadge level={l.level} size={size - 2 * stroke - 6} />
+      </Pressable>
+      <LevelSheet open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+/** Level card plus every level title. Opened from the Play tab's level ring and from profiles. */
+export function LevelSheet({ open, onClose, xp }: { open: boolean; onClose: () => void; xp?: number }) {
+  const p = useProgress();
+  const current = levelFromXp(xp ?? p.xp).level;
+  return (
+    <Sheet open={open} onClose={onClose} title="Level" tall>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+        <LevelCard large xp={xp} />
+        <Text style={[s.eyebrow, { marginTop: 20, marginBottom: 8 }]}>Levels</Text>
+        <LevelTitles current={current} />
+      </ScrollView>
+    </Sheet>
+  );
+}
+
+/** Each title and the level (and total XP) it starts at. `current` marks the one you're in. */
+function LevelTitles({ current }: { current?: number }) {
+  const here = current == null ? null : [...TIER_STARTS].reverse().find((lvl) => current >= lvl) ?? null;
+  return (
+    <View style={{ gap: 8, paddingBottom: 8 }}>
+      {TIER_STARTS.map((lvl) => {
+        const mine = lvl === here;
+        return (
+          <View key={lvl} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 18 }, mine && { borderColor: 'rgba(61,139,255,0.7)', backgroundColor: 'rgba(61,139,255,0.14)' }]}>
+            <LevelBadge level={lvl} size={48} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: F.displayBold, fontSize: 16, color: C.white }}>{titleFor(lvl)}</Text>
+              <Text style={{ fontFamily: F.body, fontSize: 12, color: mine ? C.white : w(0.65) }}>{mine ? `Level ${lvl} · Current` : `Level ${lvl}`}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={[{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }, s.tabular]}>{lvl === 1 ? 'Start' : `${fmt(totalXpFor(lvl))} XP`}</Text>
+              {lvl > 1 && <Text style={{ fontFamily: F.body, fontSize: 11, color: w(0.55) }}>total</Text>}
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -493,21 +567,7 @@ export function LevelingGuide() {
         ))}
       </View>
       <Text style={[s.eyebrow, { marginTop: 20, marginBottom: 8 }]}>Titles</Text>
-      <View style={{ gap: 8, paddingBottom: 8 }}>
-        {TIER_STARTS.map((lvl) => (
-          <View key={lvl} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 18 }]}>
-            <LevelBadge level={lvl} size={48} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: F.displayBold, fontSize: 16, color: C.white }}>{titleFor(lvl)}</Text>
-              <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.65) }}>Level {lvl}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }, s.tabular]}>{lvl === 1 ? 'Start' : `${fmt(totalXpFor(lvl))} XP`}</Text>
-              {lvl > 1 && <Text style={{ fontFamily: F.body, fontSize: 11, color: w(0.55) }}>total</Text>}
-            </View>
-          </View>
-        ))}
-      </View>
+      <LevelTitles />
     </ScrollView>
   );
 }

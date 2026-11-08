@@ -18,7 +18,7 @@ import { Avatar, Button, Card, s, Segmented, Sheet, TextField, Tile, toast, useN
 import { nav, inviteTokenFrom } from './nav';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { sfx } from './sound';
-import { LevelCard, StreakCard } from './Progress';
+import { LevelCard, LevelSheet, StreakCard } from './Progress';
 import { countryByCode } from '@/lib/regions';
 import type { AvatarLike } from './kit';
 import { C, F, w } from './theme';
@@ -313,6 +313,7 @@ export function ProfileBody({ avatar, name, place, friends, onFriends, xp, strea
   actions?: React.ReactNode; extra?: React.ReactNode;
 }) {
   const friendsText = `${friends} ${friends === 1 ? 'friend' : 'friends'}`;
+  const [levelOpen, setLevelOpen] = useState(false);
   return (
     <View>
       <View style={{ alignItems: 'center' }}>
@@ -330,7 +331,8 @@ export function ProfileBody({ avatar, name, place, friends, onFriends, xp, strea
       {actions}
 
       <View style={{ marginTop: 20, gap: 12 }}>
-        <LevelCard large xp={xp} />
+        <LevelCard large xp={xp} onPress={() => setLevelOpen(true)} />
+        <LevelSheet open={levelOpen} onClose={() => setLevelOpen(false)} xp={xp} />
         <StreakCard data={streak} />
       </View>
 

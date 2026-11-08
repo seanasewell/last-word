@@ -120,13 +120,13 @@ export function Tile({ ch, size, gold = false, delay = 0, animate = true }: { ch
 }
 
 /** The Last word logo: letter tiles. */
-/** Width kept free beside the header logo (the Play tab's bell, the lobby's Leave button). */
+/** Width kept free on each side of the header logo (the Play tab's level ring and bell, the lobby's Leave button). */
 export const HEADER_SIDE = 52;
 /** The tile logo at its header size: the same on the Play tab and in the match lobby. */
 export function HeaderLogo({ animate = true }: { animate?: boolean }) {
   const { width } = useWindowDimensions();
-  // About 80% of the row beside the side control, left-aligned.
-  const avail = (Math.min(width, 480) - 24 - HEADER_SIDE) * 0.8;
+  // Fits between a side control on each side (the Play tab's level ring and bell).
+  const avail = Math.min(width, 480) - 24 - 2 * HEADER_SIDE - 16;
   const gap = Math.max(2, Math.round((avail / 8.91) * 0.13));
   const size = Math.floor(((avail - 7 * gap) / 8) * 100) / 100;
   return <TileLogo size={size} animate={animate} />;
