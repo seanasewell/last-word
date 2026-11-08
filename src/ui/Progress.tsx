@@ -168,17 +168,26 @@ function LevelTitles({ current }: { current?: number }) {
     <View style={{ gap: 8, paddingBottom: 8 }}>
       {TIER_STARTS.map((lvl) => {
         const mine = lvl === here;
+        // Tiers you've moved past get a check; the one you're in says Current.
+        const passed = here != null && lvl < here;
         return (
-          <View key={lvl} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 18 }, mine && { borderColor: 'rgba(61,139,255,0.7)', backgroundColor: 'rgba(61,139,255,0.14)' }]}>
+          <View key={lvl} accessibilityLabel={`${titleFor(lvl)}, level ${lvl}${mine ? ', current' : passed ? ', reached' : ''}`}
+            style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 18 }, mine && { borderColor: 'rgba(61,139,255,0.7)', backgroundColor: 'rgba(61,139,255,0.14)' }]}>
             <LevelBadge level={lvl} size={48} />
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: F.displayBold, fontSize: 16, color: C.white }}>{titleFor(lvl)}</Text>
-              <Text style={{ fontFamily: F.body, fontSize: 12, color: mine ? C.white : w(0.65) }}>{mine ? `Level ${lvl} · Current` : `Level ${lvl}`}</Text>
+              <Text style={{ fontFamily: F.body, fontSize: 12, color: mine ? C.white : w(0.65) }}>Level {lvl}</Text>
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }, s.tabular]}>{lvl === 1 ? 'Start' : `${fmt(totalXpFor(lvl))} XP`}</Text>
-              {lvl > 1 && <Text style={{ fontFamily: F.body, fontSize: 11, color: w(0.55) }}>total</Text>}
-            </View>
+            {mine ? (
+              <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>Current</Text>
+            ) : passed ? (
+              <Text style={{ fontFamily: F.bodyBold, fontSize: 20, lineHeight: 24, color: C.mint }}>✓</Text>
+            ) : (
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }, s.tabular]}>{lvl === 1 ? 'Start' : `${fmt(totalXpFor(lvl))} XP`}</Text>
+                {lvl > 1 && <Text style={{ fontFamily: F.body, fontSize: 11, color: w(0.55) }}>total</Text>}
+              </View>
+            )}
           </View>
         );
       })}
