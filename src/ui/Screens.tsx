@@ -408,13 +408,15 @@ function ChallengeResults({ g, challengeId }: { g: GameState; challengeId: strin
         <FadeUp style={{ paddingTop: 12 }}>
           <ChallengeOutcome d={d} err={err} myWords={me.roundWords}
             stats={(
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                <Stat label="Words found" value={`${me.roundWords.length} / ${g.possibleWords}`} />
-                <Stat label="Longest word" value={me.stats.longestWord ? me.stats.longestWord.toUpperCase() : '—'} />
-              </View>
+              <>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                  <Stat label="Words found" value={`${me.roundWords.length} / ${g.possibleWords}`} />
+                  <Stat label="Longest word" value={me.stats.longestWord ? me.stats.longestWord.toUpperCase() : '—'} />
+                </View>
+                <View style={{ marginTop: 12 }}><XpChip gameId={g.serverId} align="start" /></View>
+              </>
             )} />
         </FadeUp>
-        <View style={{ marginTop: 16 }}><XpChip gameId={g.serverId} align="start" /></View>
         {g.missedLongest.length > 0 && (
           <>
             <Text style={[s.eyebrow, { marginTop: 18, marginBottom: 8 }]}>Long ones you missed</Text>
