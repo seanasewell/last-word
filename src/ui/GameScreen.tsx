@@ -258,7 +258,7 @@ function VersusSide({ p, leading }: { p: Player; leading: boolean }) {
   const score = useAnimatedNumber(p.roundScore, 400);
   return (
     <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-      <Avatar player={p} size={52} ring={leading} />
+      <Avatar player={p} size={52} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%', marginTop: 8 }}>
         <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: F.bodySemi, fontSize: 14, color: w(0.92) }}>{p.name}</Text>
         {isBot(p) && <BotBadge />}

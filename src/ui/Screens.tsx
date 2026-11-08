@@ -351,8 +351,8 @@ export function FinalResults({ s: g }: { s: GameState }) {
       )}>
         <FadeUp style={{ alignItems: 'center', paddingTop: 20 }}>
           <Text style={{ fontSize: 44, marginBottom: -18, marginTop: 4, zIndex: 2 }}>👑</Text>
-          <Avatar player={winner} size={104} ring />
-          <Text style={[s.h1, { fontSize: 30, textAlign: 'center', marginTop: 18 }]}>{youWon ? 'You got the last word!' : `${winner.name} got the last word`}</Text>
+          <Avatar player={winner} size={104} />
+          <Text style={[s.h1, { fontSize: 30, textAlign: 'center', marginTop: 18 }]}>{youWon ? 'You got the last word!' : `${winner.name} got the last word!`}</Text>
         </FadeUp>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 22 }}>
           <Stat compact label="Match score" value={total} color={C.amber} />
