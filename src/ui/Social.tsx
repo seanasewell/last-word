@@ -295,14 +295,9 @@ function PlayerRow({ p, subtitle, right, onPress }: { p: Person; subtitle?: stri
   );
 }
 
+/** A friend in your list: photo and name. Tap to open their profile (Challenge is there). */
 function FriendRowView({ f }: { f: FriendRow }) {
-  const played = f.wins + f.losses + f.draws;
-  const action = useChallengeAction();
-  return (
-    <PlayerRow p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }}
-      subtitle={played ? `You ${recordText(f)}` : 'No 1v1s yet'}
-      right={<SmallButton title={action.busy ? 'Sending…' : 'Challenge'} disabled={action.busy} onPress={() => void action.run(() => sendChallenge({ id: f.user_id, name: f.name }))} />} />
-  );
+  return <PlayerRow p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }} />;
 }
 
 // ── Profiles (yours and other players') ────────────────────────────────────
