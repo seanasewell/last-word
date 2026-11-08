@@ -278,8 +278,8 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
       <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.72), marginTop: 4 }}>{`${t.sub} · ${periodRange(period, new Date(now))}`}</Text>
       <View style={{ gap: 8, marginTop: 16 }}>
         <Segmented options={MODES} value={mode} onChange={setMode} />
-        <Segmented options={scopes} value={scope} onChange={setScope} small />
-        <Segmented options={PERIODS} value={period} onChange={setPeriod} small />
+        <Segmented options={scopes} value={scope} onChange={setScope} />
+        <Segmented options={PERIODS} value={period} onChange={setPeriod} />
       </View>
       <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, padding: 16 }}>
         <Avatar player={meAvatar(account)} size={44} />
