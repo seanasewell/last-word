@@ -958,7 +958,7 @@ export function ChallengePicker({ open, onClose, onPick }: { open: boolean; onCl
       )}
       {/* Fills the space when the list is short, so the button stays pinned to the bottom. */}
       {!(shown && shown.length > 0) && <View style={{ flex: 1 }} />}
-      <View style={{ marginTop: 12, marginHorizontal: -12, paddingHorizontal: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.divider, backgroundColor: C.ink850 }}>
+      <View style={{ marginHorizontal: -12, paddingHorizontal: 12, paddingTop: 12, backgroundColor: C.ink850 }}>
         <Button title="Invite friends to challenge" variant="ghost" onPress={() => void invite()} />
       </View>
     </Sheet>
