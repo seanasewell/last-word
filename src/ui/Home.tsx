@@ -11,7 +11,6 @@ import { countryByCode } from '@/lib/regions';
 import { Avatar, Card, FadeUp, HEADER_SIDE, HeaderLogo, ordinal, s, Screen, Segmented, TopToast, useNow } from './kit';
 import { nav, useNav, type Route } from './nav';
 import { DailyChallenges, LevelCard, RewardsTab, SweepBorder } from './Progress';
-import { MatchFaces } from './MatchFaces';
 import { SettingsScreen } from './Settings';
 import { SaveProgressNudge } from './SignIn';
 import { ChallengeScreen, ChallengesScreen, FriendsScreen, InviteRecoveryBanner, InviteScreen, NotificationsScreen, PlayerScreen, PlayerSearchScreen, ProfileBody } from './Social';
@@ -49,20 +48,10 @@ function TabBar({ tab, onChange, account }: { tab: Tab; onChange: (t: Tab) => vo
   );
 }
 
-/** Player headshots shown on the Elimination match card. */
-const MATCH_FACES = [
-  require('@/assets/avatars/bot1.jpg'),
-  require('@/assets/avatars/bot2.jpg'),
-  require('@/assets/avatars/bot3.jpg'),
-  require('@/assets/avatars/bot4.jpg'),
-  require('@/assets/avatars/bot5.jpg'),
-];
-
 const BELL_SIZE = 40;
 const BELL_GAP = HEADER_SIDE - BELL_SIZE;
 
 /** The elimination card's see-through blue as it looks over the screen's background, for the avatar rings. */
-const MATCH_CARD_BLUE = '#11274D';
 const MATCH_FACTS = [['👨', '6 players'], ['🕐', '5 rounds · 60 seconds each']] as const;
 
 /** Notification bell with an unread dot (Play tab, top right). */
@@ -102,7 +91,6 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
             <SweepBorder radius={24} />
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Text style={{ fontFamily: F.displayBold, fontSize: 22, color: C.white }}>Elimination</Text>
-              <MatchFaces faces={MATCH_FACES} ring={MATCH_CARD_BLUE} />
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 6, rowGap: 2, marginTop: 6 }}>
               {MATCH_FACTS.map(([e, t]) => (
