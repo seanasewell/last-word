@@ -14,6 +14,7 @@ import { AnimatedTileLogo } from './AnimatedLogo';
 import { Captcha, type CaptchaHandle } from './Captcha';
 import { Avatar, Button, FadeUp, OptionSheet, s, Screen, SelectRow, Sheet, TextField, useAuth } from './kit';
 import { pickPhoto } from './photo';
+import { DevLevelTiers } from './Progress';
 import { ProviderButtons } from './SignIn';
 import { C, F, w } from './theme';
 
@@ -110,6 +111,7 @@ export function DevControls({ open, onClose, signedIn, captchaToken, onTokenUsed
             <DevRow title="Jump to the championship round" sub="A 1v1 against a bot, as if you'd survived rounds 1–4. Played on this phone only; not counted toward ranks or XP"
               onPress={() => { onClose(); engine.devStartChampionship(); }} right={<Text style={{ color: w(0.55) }}>→</Text>} />
             <DevRow title="Restart onboarding" sub="Clears name, photo and region for this account" onPress={() => run(() => accounts.devRestartOnboarding())} right={<Text style={{ color: w(0.55) }}>→</Text>} />
+            <DevLevelTiers />
             <AdDevRows />
           </>
         )}

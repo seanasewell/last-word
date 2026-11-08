@@ -12,7 +12,7 @@ import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg'
 
 import {
   ACHIEVEMENT_GROUPS, ACHIEVEMENTS, DAILY, DAILY_BONUS, WEEKLY, WEEKLY_BONUS,
-  achievementById, dayKey, levelFromXp, nextMidnight, nextMonday, progress, titleFor, totalXpFor, viewAchievement, weekStart,
+  achievementById, dayKey, levelFromXp, nextMidnight, nextMonday, progress, titleFor, totalXpFor, viewAchievement, weekStart, xpForLevel,
   type AchievementView, type Celebration, type ChallengeDef, type ProgressState,
 } from '@/lib/progress';
 import { ads } from '@/lib/ads';
@@ -191,6 +191,43 @@ function LevelTitles({ current }: { current?: number }) {
           </View>
         );
       })}
+    </View>
+  );
+}
+
+/**
+ * Developer controls: step your level up or down a tier (to review the level ring, sheet
+ * and titles). Lands 40% of the way into the tier's first level so the ring shows progress.
+ */
+export function DevLevelTiers() {
+  const p = useProgress();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const l = levelFromXp(p.xp);
+  const tierStart = [...TIER_STARTS].reverse().find((t) => l.level >= t) ?? 1;
+  const next = TIER_STARTS.find((t) => t > l.level);
+  const prev = [...TIER_STARTS].reverse().find((t) => t < tierStart);
+  const go = async (level: number) => {
+    setBusy(true); setErr(null);
+    const e = await progress.devSetXp(totalXpFor(level) + xpForLevel(level) * 0.4);
+    setBusy(false);
+    if (e) setErr(e);
+  };
+  const pill = (label: string, target: number | undefined) => (
+    <Pressable disabled={busy || target == null} onPress={() => target != null && void go(target)}
+      style={({ pressed }) => ({ flex: 1, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: target == null ? w(0.04) : pressed ? 'rgba(61,139,255,0.35)' : 'rgba(61,139,255,0.2)' })}>
+      <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: target == null ? w(0.35) : C.white }}>{label}</Text>
+    </Pressable>
+  );
+  return (
+    <View style={{ borderRadius: 16, backgroundColor: w(0.05), paddingHorizontal: 16, paddingVertical: 14 }}>
+      <Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.white }}>Level tiers</Text>
+      <Text style={{ fontFamily: F.body, fontSize: 12, color: w(0.7), marginTop: 2 }}>{busy ? 'Updating…' : `Now level ${l.level} · ${l.title}. Sets your XP on the server`}</Text>
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+        {pill(prev != null ? `← Level ${prev}` : '← Previous', prev)}
+        {pill(next != null ? `Level ${next} →` : 'Next →', next)}
+      </View>
+      {err && <Text style={{ fontFamily: F.body, fontSize: 12, color: C.coral, marginTop: 6 }}>{err}</Text>}
     </View>
   );
 }

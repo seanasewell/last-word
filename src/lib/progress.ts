@@ -243,6 +243,18 @@ class ProgressStore {
 
   currentStreak() { return this.state.streak.current; }
 
+  /** Developer: set your XP (to review level tiers). Returns an error message, or null. */
+  async devSetXp(xp: number): Promise<string | null> {
+    try {
+      const { error } = await supabase.rpc('dev_set_xp', { p_xp: Math.round(xp) });
+      if (error) return error.message;
+      await this.refresh();
+      return null;
+    } catch {
+      return 'Couldn’t reach the server.';
+    }
+  }
+
   /** XP earned in a given game (0 until the server has scored it). */
   xpFor(gameId: string | null) {
     const g = this.state.lastGame;
