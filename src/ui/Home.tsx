@@ -74,10 +74,9 @@ function Bell() {
       accessibilityLabel={unread ? `Notifications, ${unread} unread` : 'Notifications'}
       style={({ pressed }) => ({ width: BELL_SIZE, height: BELL_SIZE, borderRadius: BELL_SIZE / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? w(0.08) : 'transparent' })}>
       <Text style={{ fontSize: 21 }}>🔔</Text>
+      {/* Just a dot: there's something new. */}
       {unread > 0 && (
-        <View style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, paddingHorizontal: 4, borderRadius: 8, backgroundColor: C.coral, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.bg }}>
-          <Text style={{ fontFamily: F.bodyBold, fontSize: 9, color: C.white }}>{unread > 9 ? '9+' : unread}</Text>
-        </View>
+        <View style={{ position: 'absolute', top: 7, right: 8, width: 10, height: 10, borderRadius: 5, backgroundColor: C.coral, borderWidth: 2, borderColor: C.bg }} />
       )}
     </Pressable>
   );
