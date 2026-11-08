@@ -60,7 +60,7 @@ const TIER_COLORS: [string, string, string, string, string, string][] = [
   ['#14B8C8', '#A6F4FF', '#3EE6E0', '#0B6E86', '#0E8FA8', '#14B8C8'],
   ['#C08418', '#F2C45A', '#D99A22', '#6E3F05', '#93580B', '#D99A22'],
   ['#161A24', '#5A6478', '#3B2F6B', '#05060A', '#1E3A4F', '#786EC8'],
-  ['#4FA8E8', '#FFD95A', '#4CD98A', '#3D8BFF', '#5FE08F', '#4CD98A'],
+  ['#4FA8E8', '#FFD95A', '#4CD98A', '#3D8BFF', '#FF7AC0', '#4CD98A'],
 ];
 const SPOTS: [string, string, string][] = [['22%', '18%', '55%'], ['85%', '25%', '50%'], ['78%', '88%', '60%'], ['12%', '85%', '55%']];
 
