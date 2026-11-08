@@ -356,7 +356,17 @@ export function XpChip({ gameId, align = 'center' }: { gameId: string | null; al
 /** XP earned in a game (0 until the server has scored it, or for games played offline). */
 export function usePendingXp(gameId: string | null) {
   useProgress();
-  return progress.xpFor(gameId);
+  const xp = progress.xpFor(gameId);
+  // The server scores the game as it ends; check quickly until its XP shows up (up to ~10 seconds).
+  const waiting = !!gameId && xp <= 0;
+  useEffect(() => {
+    if (!waiting) return;
+    void progress.refresh();
+    let tries = 0;
+    const t = setInterval(() => { if (++tries > 20) clearInterval(t); else void progress.refresh(); }, 500);
+    return () => clearInterval(t);
+  }, [waiting, gameId]);
+  return xp;
 }
 
 /** Closest achievement, shown between rounds. */

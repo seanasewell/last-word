@@ -201,10 +201,16 @@ class ProgressStore {
     void this.refresh();
   }
 
-  /** Fetch the latest progress from the server. */
+  private again = false;
+
+  /**
+   * Fetch the latest progress from the server. A call made while a fetch is already
+   * running fetches again once it finishes, so it never gets an answer from before it was made.
+   */
   refresh(): Promise<void> {
     if (!this.id) return Promise.resolve();
-    this.inflight ??= (async () => {
+    if (this.inflight) { this.again = true; return this.inflight; }
+    this.inflight = (async () => {
       try {
         const { data, error } = await supabase.rpc('my_progress', { p_tz: timeZone() });
         if (error || !data) return;
@@ -220,6 +226,7 @@ class ProgressStore {
       } finally {
         this.inflight = null;
       }
+      if (this.again) { this.again = false; await this.refresh(); }
     })();
     return this.inflight;
   }
