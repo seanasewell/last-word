@@ -372,3 +372,20 @@ export function TextField({ style, onFocus, onBlur, ...props }: TextInputProps) 
     />
   );
 }
+
+/** A row of tabs (one selected), used on Ranks and Rewards. */
+export function Segmented<T extends string>({ options, value, onChange, small = false }: { options: { id: T; label: string }[]; value: T; onChange: (v: T) => void; small?: boolean }) {
+  return (
+    <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 4, padding: 4, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
+      {options.map((x) => {
+        const on = value === x.id;
+        return (
+          <Pressable key={x.id} onPress={() => onChange(x.id)} accessibilityRole="tab" accessibilityState={{ selected: on }}
+            style={{ flex: 1, height: small ? 32 : 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.primary : 'transparent' }}>
+            <Text numberOfLines={1} style={{ fontFamily: F.bodySemi, fontSize: small ? 12 : 13, color: on ? C.white : w(0.72) }}>{x.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}

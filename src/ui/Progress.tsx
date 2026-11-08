@@ -16,7 +16,7 @@ import {
   type AchievementView, type Celebration, type ChallengeDef, type ProgressState,
 } from '@/lib/progress';
 import { ads } from '@/lib/ads';
-import { Button, s, useNow } from './kit';
+import { Button, s, Segmented, useNow } from './kit';
 import { C, F, w } from './theme';
 
 export function useProgress(): ProgressState {
@@ -91,9 +91,11 @@ export function LevelBadge({ level, size }: { level: number; size: number }) {
 }
 
 // ── Level card ─────────────────────────────────────────────────────────────
-export function LevelCard({ large = false }: { large?: boolean }) {
+/** Your level, or another player's when `xp` is given. */
+export function LevelCard({ large = false, xp }: { large?: boolean; xp?: number }) {
   const p = useProgress();
-  const l = levelFromXp(p.xp);
+  const total = xp ?? p.xp;
+  const l = levelFromXp(total);
   const max = l.need === 0;
   return (
     <View style={[s.card, { borderRadius: 24, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
@@ -104,7 +106,7 @@ export function LevelCard({ large = false }: { large?: boolean }) {
           {!max && <Text style={[{ fontFamily: F.bodySemi, fontSize: 12, color: w(0.7) }, s.tabular]}>{fmt(l.into)} / {fmt(l.need)} XP</Text>}
         </View>
         <View style={{ marginTop: 8 }}><Bar pct={max ? 1 : l.into / l.need} h={large ? 8 : 6} /></View>
-        <Text style={{ marginTop: 6, fontFamily: F.body, fontSize: 12, color: w(0.7) }}>{max ? `Max level · ${fmt(p.xp)} XP` : `${fmt(l.toNext)} XP to level ${l.level + 1}`}</Text>
+        <Text style={{ marginTop: 6, fontFamily: F.body, fontSize: 12, color: w(0.7) }}>{max ? `Max level · ${fmt(total)} XP` : `${fmt(l.toNext)} XP to level ${l.level + 1}`}</Text>
       </View>
     </View>
   );
@@ -200,8 +202,10 @@ function WeeklyChallenges() {
 }
 
 // ── Streak ─────────────────────────────────────────────────────────────────
-export function StreakCard() {
-  const p = useProgress();
+/** Your streak, or another player's when `data` is given. */
+export function StreakCard({ data }: { data?: { current: number; best: number; days: string[] } }) {
+  const mine = useProgress();
+  const p = data ? { streak: { current: data.current, best: data.best }, days: data.days, today: '' } : mine;
   const current = p.streak.current;
   const today = p.today || dayKey();
   const [ty, tm, td] = today.split('-').map(Number);
@@ -319,14 +323,25 @@ function AchievementCollection() {
 }
 
 /** The Rewards tab. */
+type RewardsView = 'challenges' | 'achievements';
+let rememberedRewards: RewardsView = 'challenges';
+
 export function RewardsTab() {
   useEffect(() => { void progress.refresh(); }, []);
+  const [view, setViewState] = useState<RewardsView>(rememberedRewards);
+  const setView = (v: RewardsView) => { rememberedRewards = v; setViewState(v); };
   return (
     <View style={{ gap: 24 }}>
-      <Text style={s.h1}>Rewards</Text>
-      <DailyChallenges />
-      <WeeklyChallenges />
-      <AchievementCollection />
+      <View style={{ gap: 16 }}>
+        <Text style={s.h1}>Rewards</Text>
+        <Segmented options={[{ id: 'challenges' as RewardsView, label: 'Challenges' }, { id: 'achievements' as RewardsView, label: 'Achievements' }]} value={view} onChange={setView} />
+      </View>
+      {view === 'challenges' ? (
+        <>
+          <DailyChallenges />
+          <WeeklyChallenges />
+        </>
+      ) : <AchievementCollection />}
     </View>
   );
 }

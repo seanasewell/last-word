@@ -19,6 +19,8 @@ export interface SearchRow { user_id: string; name: string; photo_url: string | 
 export interface PlayerProfileData {
   id: string; name: string; photo_url: string | null; country: string; region: string | null; is_me: boolean;
   elimination_wins: number; solo_best: number; record: Record3;
+  /** Same things as your own profile shows: level (from XP), streak, friend count. */
+  xp: number; streak: { current: number; best: number }; days: string[]; friends: number;
   h2h: (Record3 & { streak: { holder: 'me' | 'them'; count: number } | null }) | null;
   relation: Relation; blocked: boolean;
 }
@@ -127,6 +129,7 @@ export async function removeFriend(userId: string): Promise<void> {
 export async function playerProfile(userId: string): Promise<PlayerProfileData> {
   const p = await call<PlayerProfileData>('player_profile', { p_user: userId });
   return { ...p, elimination_wins: num(p.elimination_wins), solo_best: num(p.solo_best), record: rec(p.record),
+    xp: num(p.xp), streak: { current: num(p.streak?.current), best: num(p.streak?.best) }, days: p.days ?? [], friends: num(p.friends),
     h2h: p.h2h ? { ...rec(p.h2h), streak: p.h2h.streak ?? null } : null };
 }
 

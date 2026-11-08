@@ -8,13 +8,13 @@ import { social, useSocial } from '@/lib/challenges';
 import { engine, type GameState } from '@/lib/engine';
 import { fetchModeLeaderboard, type Leaderboard, type RankEntry, type RankMode, type Scope } from '@/lib/ranks';
 import { countryByCode } from '@/lib/regions';
-import { Avatar, Card, FadeUp, HEADER_SIDE, HeaderLogo, ordinal, s, Screen, TopToast, useNow } from './kit';
+import { Avatar, Card, FadeUp, HEADER_SIDE, HeaderLogo, ordinal, s, Screen, Segmented, TopToast, useNow } from './kit';
 import { nav, useNav, type Route } from './nav';
-import { DailyChallenges, LevelCard, RewardsTab, StreakCard, SweepBorder } from './Progress';
+import { DailyChallenges, LevelCard, RewardsTab, SweepBorder } from './Progress';
 import { MatchFaces } from './MatchFaces';
 import { SettingsScreen } from './Settings';
 import { SaveProgressNudge } from './SignIn';
-import { ChallengeScreen, ChallengesScreen, FriendsScreen, InviteRecoveryBanner, InviteScreen, NotificationsScreen, PlayerScreen, RecordStats } from './Social';
+import { ChallengeScreen, ChallengesScreen, FriendsScreen, InviteRecoveryBanner, InviteScreen, NotificationsScreen, PlayerScreen, ProfileBody } from './Social';
 import { C, F, w } from './theme';
 
 type Tab = 'play' | 'ranks' | 'rewards' | 'profile';
@@ -191,22 +191,6 @@ function resetText(period: Period, now: number): string | null {
   return `${label} · ${when} left`;
 }
 
-function Segmented<T extends string>({ options, value, onChange, small = false }: { options: { id: T; label: string }[]; value: T; onChange: (v: T) => void; small?: boolean }) {
-  return (
-    <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 4, padding: 4, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }}>
-      {options.map((x) => {
-        const on = value === x.id;
-        return (
-          <Pressable key={x.id} onPress={() => onChange(x.id)} accessibilityRole="tab" accessibilityState={{ selected: on }}
-            style={{ flex: 1, height: small ? 32 : 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.primary : 'transparent' }}>
-            <Text numberOfLines={1} style={{ fontFamily: F.bodySemi, fontSize: small ? 12 : 13, color: on ? C.white : w(0.72) }}>{x.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 const MODES: { id: RankMode; label: string }[] = [
   { id: 'elimination', label: 'Elimination' },
   { id: 'solo', label: 'Solo' },
@@ -379,33 +363,11 @@ function ProfileTab({ account, best }: { account: Account; best: number }) {
           <Text style={{ fontSize: 22 }}>⚙️</Text>
         </Pressable>
       </View>
-      <View style={{ alignItems: 'center', marginTop: 10 }}>
-        <Avatar player={meAvatar(account)} size={104} ring />
-        <Text style={{ fontFamily: F.displayBold, fontSize: 22, color: C.white, marginTop: 12 }}>{account.name}</Text>
-        <Text style={{ fontFamily: F.body, fontSize: 13, color: w(0.65), marginTop: 2 }}>{country.flag} {account.region}</Text>
+      <View style={{ marginTop: 10 }}>
+        <ProfileBody avatar={meAvatar(account)} name={account.name} place={`${country.flag} ${account.region}`}
+          friends={friends} onFriends={() => nav.push({ name: 'friends' })}
+          eliminationWins={eliminationWins} soloBest={soloBest} record={record} onRecord={() => nav.push({ name: 'challenges', tab: 'history' })} />
       </View>
-
-      <View style={{ marginTop: 20, gap: 12 }}>
-        <LevelCard large />
-        <StreakCard />
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-        <Card style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}>
-          <Text style={s.eyebrow}>Elimination wins</Text>
-          <Text style={[{ fontFamily: F.display, fontSize: 24, color: C.white }, s.tabular]}>{eliminationWins}</Text>
-        </Card>
-        <Card style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}>
-          <Text style={s.eyebrow}>Solo best</Text>
-          <Text style={[{ fontFamily: F.display, fontSize: 24, color: C.amber }, s.tabular]}>{soloBest}</Text>
-        </Card>
-      </View>
-      <Pressable onPress={() => nav.push({ name: 'challenges', tab: 'history' })}>
-        <Card style={{ marginTop: 12, paddingVertical: 14 }}>
-          <Text style={[s.eyebrow, { textAlign: 'center', marginBottom: 8 }]}>1v1 record</Text>
-          <RecordStats r={record} />
-        </Card>
-      </Pressable>
 
       <Text style={[s.eyebrow, { marginTop: 26, marginBottom: 8 }]}>Social</Text>
       <View style={{ borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden' }}>

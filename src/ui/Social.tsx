@@ -18,6 +18,9 @@ import { Avatar, Button, Card, s, Sheet, TextField, Tile, toast, useNow } from '
 import { nav, inviteTokenFrom } from './nav';
 import { PlayerActions, type PlayerRef } from './PlayerActions';
 import { sfx } from './sound';
+import { LevelCard, StreakCard } from './Progress';
+import { countryByCode } from '@/lib/regions';
+import type { AvatarLike } from './kit';
 import { C, F, w } from './theme';
 
 // ── Shared bits ────────────────────────────────────────────────────────────
@@ -95,8 +98,17 @@ export function RecordStats({ r, size = 26 }: { r: Record3; size?: number }) {
   );
 }
 
-function PersonAvatar({ p, size = 40 }: { p: { id?: string | null; user_id?: string; name: string; photo_url?: string | null } | null; size?: number }) {
-  return <Avatar player={personAvatar(p)} size={size} />;
+/** A player's avatar. With `link`, tapping it opens their profile. */
+function PersonAvatar({ p, size = 40, link = false }: { p: { id?: string | null; user_id?: string; name: string; photo_url?: string | null } | null; size?: number; link?: boolean }) {
+  const id = p?.id ?? p?.user_id;
+  const avatar = <Avatar player={personAvatar(p)} size={size} />;
+  if (!link || !id) return avatar;
+  return (
+    <Pressable onPress={() => nav.push({ name: 'player', id })} hitSlop={4} accessibilityRole="button" accessibilityLabel={`${p?.name ?? 'Player'}'s profile`}
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+      {avatar}
+    </Pressable>
+  );
 }
 
 async function shareText(message: string) {
@@ -253,7 +265,62 @@ function FriendRowView({ f }: { f: FriendRow }) {
   );
 }
 
-// ── Player profile ─────────────────────────────────────────────────────────
+// ── Profiles (yours and other players') ────────────────────────────────────
+/**
+ * The profile layout, the same for you and for other players: photo, name, place and
+ * friend count, then level, streak, wins, best and 1v1 record. Other players' profiles
+ * add the friend and challenge buttons (`actions`) and your head-to-head (`extra`).
+ */
+export function ProfileBody({ avatar, name, place, friends, onFriends, xp, streak, eliminationWins, soloBest, record, onRecord, actions, extra }: {
+  avatar: AvatarLike; name: string; place: string; friends: number; onFriends?: () => void;
+  xp?: number; streak?: { current: number; best: number; days: string[] };
+  eliminationWins: number; soloBest: number; record: Record3; onRecord?: () => void;
+  actions?: React.ReactNode; extra?: React.ReactNode;
+}) {
+  const friendsText = `${friends} ${friends === 1 ? 'friend' : 'friends'}`;
+  return (
+    <View>
+      <View style={{ alignItems: 'center' }}>
+        <Avatar player={avatar} size={104} ring />
+        <Text style={{ fontFamily: F.displayBold, fontSize: 22, color: C.white, marginTop: 12, textAlign: 'center' }}>{name}</Text>
+        {place ? <Text style={{ fontFamily: F.body, fontSize: 13, color: w(0.65), marginTop: 2 }}>{place}</Text> : null}
+        <Pressable onPress={onFriends} disabled={!onFriends} accessibilityRole={onFriends ? 'button' : undefined} hitSlop={6}
+          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999,
+            backgroundColor: pressed ? 'rgba(61,139,255,0.2)' : w(0.06), borderWidth: 1, borderColor: w(0.1) })}>
+          <Text style={{ fontSize: 13 }}>👥</Text>
+          <Text style={[{ fontFamily: F.bodySemi, fontSize: 13, color: C.white }, s.tabular]}>{friendsText}</Text>
+          {onFriends && <Text style={{ fontFamily: F.bodySemi, fontSize: 13, color: w(0.55) }}>›</Text>}
+        </Pressable>
+      </View>
+
+      {actions}
+
+      <View style={{ marginTop: 20, gap: 12 }}>
+        <LevelCard large xp={xp} />
+        <StreakCard data={streak} />
+      </View>
+
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+        <Card style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}>
+          <Text style={s.eyebrow}>Elimination wins</Text>
+          <Text style={[{ fontFamily: F.display, fontSize: 24, color: C.white }, s.tabular]}>{eliminationWins}</Text>
+        </Card>
+        <Card style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}>
+          <Text style={s.eyebrow}>Solo best</Text>
+          <Text style={[{ fontFamily: F.display, fontSize: 24, color: C.amber }, s.tabular]}>{soloBest}</Text>
+        </Card>
+      </View>
+      <Pressable onPress={onRecord} disabled={!onRecord}>
+        <Card style={{ marginTop: 12, paddingVertical: 14 }}>
+          <Text style={[s.eyebrow, { textAlign: 'center', marginBottom: 8 }]}>1v1 record</Text>
+          <RecordStats r={record} />
+        </Card>
+      </Pressable>
+      {extra}
+    </View>
+  );
+}
+
 export function PlayerScreen({ id }: { id: string }) {
   const { data: p, error, reload, setData } = useLoad<PlayerProfileData>(() => playerProfile(id), [id]);
   const [busy, setBusy] = useState(false);
@@ -271,62 +338,59 @@ export function PlayerScreen({ id }: { id: string }) {
   };
   const h = p.h2h;
   const streak = h?.streak ? (h.streak.holder === 'me' ? `You've won the last ${h.streak.count}` : `${p.name} has won the last ${h.streak.count}`) : null;
+  const country = countryByCode(p.country);
+  const played = h ? h.wins + h.losses + h.draws : 0;
 
-  return (
-    <View>
-      <View style={{ alignItems: 'center' }}>
-        <PersonAvatar p={p} size={96} />
-        <Text style={[s.h1, { marginTop: 12, textAlign: 'center' }]}>{p.name}</Text>
-        {p.region ? <Text style={sub}>{p.region}</Text> : null}
-      </View>
-
-      {!p.is_me && !p.blocked && (
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-          <View style={{ flex: 1 }}>
-            {p.relation === 'friends' ? (
-              <Button title="Friends ✓" variant="ghost" onPress={() => setConfirmRemove(true)} />
-            ) : p.relation === 'sent' ? (
-              <Button title="Request sent" variant="ghost" disabled={busy} onPress={() => void act(async () => { await removeFriend(p.id); return 'none'; })} />
-            ) : p.relation === 'received' ? (
-              <Button title="Accept request" disabled={busy} onPress={() => void act(() => respondFriendRequest(p.id, true))} />
-            ) : (
-              <Button title="Add friend" variant="ghost" disabled={busy} onPress={() => void act(() => sendFriendRequest(p.id))} />
-            )}
-          </View>
-          <View style={{ flex: 1 }}><Button title={challenge.busy ? 'Sending…' : 'Challenge ⚔️'} disabled={challenge.busy} onPress={() => void challenge.run(() => sendChallenge({ id: p.id, name: p.name }))} /></View>
+  const actions = !p.is_me && !p.blocked ? (
+    <>
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+        <View style={{ flex: 1 }}>
+          {p.relation === 'friends' ? (
+            <Button title="Friends ✓" variant="ghost" onPress={() => setConfirmRemove(true)} />
+          ) : p.relation === 'sent' ? (
+            <Button title="Request sent" variant="ghost" disabled={busy} onPress={() => void act(async () => { await removeFriend(p.id); return 'none'; })} />
+          ) : p.relation === 'received' ? (
+            <Button title="Accept request" disabled={busy} onPress={() => void act(() => respondFriendRequest(p.id, true))} />
+          ) : (
+            <Button title="Add friend" disabled={busy} onPress={() => void act(() => sendFriendRequest(p.id))} />
+          )}
         </View>
-      )}
-      {note && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{note}</Text>}
-      {p.blocked && <Text style={[s.body, { textAlign: 'center', marginTop: 14 }]}>{"You've blocked this player. Unblock them in Settings → Blocked players."}</Text>}
-
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 20 }}>
-        <Card style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}>
-          <Text style={s.eyebrow}>Elimination wins</Text>
-          <Text style={[{ fontFamily: F.display, fontSize: 22, color: C.white }, s.tabular]}>{p.elimination_wins}</Text>
-        </Card>
-        <Card style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}>
-          <Text style={s.eyebrow}>Solo best</Text>
-          <Text style={[{ fontFamily: F.display, fontSize: 22, color: C.amber }, s.tabular]}>{p.solo_best}</Text>
-        </Card>
+        {/* Only friends can be challenged. */}
+        {p.relation === 'friends' && (
+          <View style={{ flex: 1 }}><Button title={challenge.busy ? 'Sending…' : 'Challenge ⚔️'} disabled={challenge.busy} onPress={() => void challenge.run(() => sendChallenge({ id: p.id, name: p.name }))} /></View>
+        )}
       </View>
-      <Card style={{ marginTop: 8, paddingVertical: 14 }}>
-        <Text style={[s.eyebrow, { textAlign: 'center', marginBottom: 8 }]}>1v1 record</Text>
-        <RecordStats r={p.record} />
-      </Card>
-      {h && (
-        <Card style={{ marginTop: 8, paddingVertical: 14, borderColor: 'rgba(61,139,255,0.4)' }}>
+      {p.relation === 'sent' && <Text style={[sub, { textAlign: 'center', marginTop: 8 }]}>{`Waiting for ${p.name} to accept. Tap to cancel.`}</Text>}
+      {p.relation === 'received' && <Text style={[sub, { textAlign: 'center', marginTop: 8 }]}>{`${p.name} wants to be friends.`}</Text>}
+      {note && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }}>{note}</Text>}
+    </>
+  ) : p.blocked ? (
+    <Text style={[s.body, { textAlign: 'center', marginTop: 14 }]}>{"You've blocked this player. Unblock them in Settings → Blocked players."}</Text>
+  ) : null;
+
+  const extra = (
+    <>
+      {h && played > 0 && (
+        <Card style={{ marginTop: 12, paddingVertical: 14, borderColor: 'rgba(61,139,255,0.4)' }}>
           <Text style={[s.eyebrow, { textAlign: 'center', marginBottom: 8 }]}>You vs {p.name}</Text>
           <RecordStats r={h} />
           {streak && <Text style={{ textAlign: 'center', marginTop: 10, fontFamily: F.bodySemi, fontSize: 13, color: h.streak?.holder === 'me' ? C.mint : C.amber }}>🔥 {streak}</Text>}
         </Card>
       )}
-
       {!p.is_me && (
         <Pressable onPress={() => setActing({ name: p.name, glyph: p.name[0]?.toUpperCase() ?? '?', hue: personAvatar(p).hue, photo: p.photo_url, target: { userId: p.id } })}
           hitSlop={8} style={{ alignSelf: 'center', marginTop: 24 }}>
           <Text style={{ fontFamily: F.bodySemi, fontSize: 13, color: w(0.6) }}>Report or block</Text>
         </Pressable>
       )}
+    </>
+  );
+
+  return (
+    <View>
+      <ProfileBody avatar={personAvatar(p)} name={p.name} place={p.region ? `${country.flag} ${p.region}` : country.flag}
+        friends={p.friends} xp={p.xp} streak={{ current: p.streak.current, best: p.streak.best, days: p.days }}
+        eliminationWins={p.elimination_wins} soloBest={p.solo_best} record={p.record} actions={actions} extra={extra} />
 
       <PlayerActions player={acting} onClose={() => setActing(null)} onBlocked={() => { void social.refresh(); reload(); }} />
       <Sheet open={confirmRemove} onClose={() => setConfirmRemove(false)} title={`Remove ${p.name}?`}>
@@ -521,7 +585,7 @@ function ChallengeRowView({ c, now, right, pressable = false }: { c: ChallengeRo
   return (
     <Pressable disabled={!pressable} onPress={() => nav.push({ name: 'challenge', id: c.id })}
       style={({ pressed }) => [row, { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16, backgroundColor: pressed ? 'rgba(61,139,255,0.12)' : w(0.04) }]}>
-      <PersonAvatar p={other} size={38} />
+      <PersonAvatar p={other} size={38} link />
       <View style={{ flex: 1 }}>
         <Text numberOfLines={1} style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.white }}>{other.name}</Text>
         {c.needs_response
@@ -597,12 +661,12 @@ export function ChallengeScreen({ id }: { id: string }) {
 
   return (
     <PinnedFooterPage footer={footer}>
-      {done ? <ResultHeader d={d} /> : (
+      {done ? <ResultHeader d={d} linkOther /> : (
         <Card style={{ padding: 20, alignItems: 'center' }}>
           <View style={[row, { gap: 18 }]}>
             <PersonAvatar p={d.me} size={56} />
             <Text style={{ fontFamily: F.display, fontSize: 20, color: w(0.6) }}>vs</Text>
-            <PersonAvatar p={other} size={56} />
+            <PersonAvatar p={other} size={56} link />
           </View>
           <Text style={{ fontFamily: F.displayBold, fontSize: 18, color: C.white, marginTop: 12, textAlign: 'center' }}>{title}</Text>
           {body ? <Text style={[s.body, { textAlign: 'center', marginTop: 4, fontSize: 14 }]}>{body}</Text> : null}
@@ -640,14 +704,15 @@ export function ChallengeScreen({ id }: { id: string }) {
   );
 }
 
-function ResultHeader({ d }: { d: ChallengeDetail }) {
+/** `linkOther`: tapping the other player's avatar opens their profile (on the challenge page). */
+function ResultHeader({ d, linkOther = false }: { d: ChallengeDetail; linkOther?: boolean }) {
   const other: Person = d.other ?? { id: null, name: 'Deleted player', photo_url: null };
   const win = d.outcome === 'win';
   // Same wording as an elimination win.
   const title = d.outcome === 'draw' ? "It's a draw" : win ? 'You got the last word! 🎉' : `${other.name} got the last word 😢`;
-  const side = (p: Person, score: number | null, lead: boolean) => (
+  const side = (p: Person, score: number | null, lead: boolean, link = false) => (
     <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-      <PersonAvatar p={p} size={64} />
+      <PersonAvatar p={p} size={64} link={link} />
       <Text numberOfLines={1} style={{ fontFamily: F.bodyBold, fontSize: 14, color: C.white }}>{p.name}</Text>
       <Text style={[{ fontFamily: F.display, fontSize: 34, color: lead ? C.amber : w(0.85) }, s.tabular]}>{score ?? 0}</Text>
     </View>
@@ -658,7 +723,7 @@ function ResultHeader({ d }: { d: ChallengeDetail }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16 }}>
         {side(d.me, d.my_score, d.outcome === 'win')}
         <Text style={{ fontFamily: F.display, fontSize: 18, color: w(0.5) }}>vs</Text>
-        {side(other, d.their_score, d.outcome === 'loss')}
+        {side(other, d.their_score, d.outcome === 'loss', linkOther)}
       </View>
       {d.forfeit && (
         <Text style={[sub, { textAlign: 'center', marginTop: 12 }]}>
@@ -899,7 +964,7 @@ export function NotificationsScreen() {
       {list.data.map((n) => (
         <Pressable key={n.id} onPress={() => openNotification(n)}
           style={({ pressed }) => [row, { paddingHorizontal: 12, paddingVertical: 12, borderRadius: 16, backgroundColor: pressed ? 'rgba(61,139,255,0.12)' : n.read ? w(0.03) : 'rgba(61,139,255,0.10)' }]}>
-          <PersonAvatar p={n.actor} size={38} />
+          <PersonAvatar p={n.actor} size={38} link />
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: n.read ? F.body : F.bodySemi, fontSize: 14, color: C.white }}>{notificationText(n)}</Text>
             <Text style={sub}>{ago(n.created_at, now)}</Text>
