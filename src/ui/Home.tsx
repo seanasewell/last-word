@@ -425,7 +425,7 @@ function RoutePage({ route, account }: { route: Route; account: Account }) {
           <ChallengeScreen id={route.id} />
         </Animated.View>
       ) : (
-      <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 40 }}
+      <ScrollView key={key} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 40 }}
         refreshControl={route.name === 'settings' ? undefined : <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
         <Animated.View key={key} entering={FadeIn.duration(180)}>
           {route.name === 'settings' && <SettingsScreen account={account} />}
