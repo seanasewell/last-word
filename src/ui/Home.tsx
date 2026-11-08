@@ -201,13 +201,22 @@ const MODE_TEXT: Record<RankMode, { sub: string; empty: string; emptyBody: (phra
   '1v1': { sub: 'Best 1v1 records', empty: 'No 1v1 results yet', emptyBody: (p) => `Win a 1v1 challenge ${p === 'all time' ? '' : p} to be first on this board.`, unit: (n) => (n === 1 ? 'win' : 'wins') },
 };
 
+const MEDAL_TINT: Record<number, { bg: string; border: string }> = {
+  1: { bg: 'rgba(255,194,74,0.24)', border: 'rgba(255,194,74,0.65)' }, // gold
+  2: { bg: 'rgba(201,211,224,0.2)', border: 'rgba(201,211,224,0.6)' }, // silver
+  3: { bg: 'rgba(217,138,78,0.24)', border: 'rgba(217,138,78,0.65)' }, // bronze
+};
+
 function RankRow({ e, scope, mode, onPress }: { e: RankEntry; scope: Scope; mode: RankMode; onPress?: () => void }) {
   const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : null;
+  const tint = MEDAL_TINT[e.rank];
   const where = scope === 'world' ? `${e.country.flag} ${e.country.name}` : scope === 'national' ? e.region : `${e.country.flag} ${e.region}`;
   return (
     <Pressable onPress={onPress} disabled={!onPress} accessibilityHint={onPress ? 'Open this player’s profile' : undefined}
       style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16,
-      backgroundColor: pressed ? 'rgba(61,139,255,0.12)' : e.isYou ? 'rgba(61,139,255,0.15)' : e.rank <= 3 ? 'rgba(255,181,71,0.06)' : w(0.03), borderWidth: e.isYou ? 1 : 0, borderColor: 'rgba(61,139,255,0.4)' })}>
+      // Top 3 take their medal's color (gold, silver, bronze); your own row keeps its blue outline.
+      backgroundColor: pressed ? 'rgba(61,139,255,0.12)' : tint ? tint.bg : e.isYou ? 'rgba(61,139,255,0.15)' : w(0.03),
+      borderWidth: e.isYou || tint ? 1 : 0, borderColor: e.isYou ? 'rgba(61,139,255,0.6)' : tint ? tint.border : 'transparent' })}>
       <View style={{ width: 30, alignItems: 'center' }}>
         {medal ? <Text style={{ fontSize: 20 }}>{medal}</Text> : <Text style={[{ fontFamily: F.displayBold, fontSize: 14, color: w(0.7) }, s.tabular]}>{e.rank}</Text>}
       </View>
