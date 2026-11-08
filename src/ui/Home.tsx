@@ -237,9 +237,7 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
   const [mode, setModeState] = useState<RankMode>(rememberedMode);
   const setMode = (m: RankMode) => { rememberedMode = m; setModeState(m); };
   const [scope, setScope] = useState<Scope>('world');
-  const [periodPick, setPeriod] = useState<Period>('week');
-  // 1v1 boards are always all-time records, so there's no time filter for them.
-  const period: Period = mode === '1v1' ? 'all' : periodPick;
+  const [period, setPeriod] = useState<Period>('week');
   const [board, setBoard] = useState<{ key: string; data: Leaderboard } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const country = countryByCode(account.country);
@@ -278,11 +276,11 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
           <Text style={{ fontSize: 21 }}>🔍</Text>
         </Pressable>
       </View>
-      <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.72), marginTop: 4 }}>{mode === '1v1' ? `${t.sub} · All time` : `${t.sub} · ${periodRange(period, new Date(now))}`}</Text>
+      <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.72), marginTop: 4 }}>{`${t.sub} · ${periodRange(period, new Date(now))}`}</Text>
       <View style={{ gap: 8, marginTop: 16 }}>
         <Segmented options={MODES} value={mode} onChange={setMode} />
         <Segmented options={scopes} value={scope} onChange={setScope} small />
-        {mode !== '1v1' && <Segmented options={PERIODS} value={period} onChange={setPeriod} small />}
+        <Segmented options={PERIODS} value={period} onChange={setPeriod} small />
       </View>
       <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card, padding: 16 }}>
         <Avatar player={meAvatar(account)} size={44} />
