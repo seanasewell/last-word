@@ -173,11 +173,11 @@ function WordInput({ final }: { final: boolean }) {
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           accessibilityLabel="Word entry"
-          style={{ height: 56, borderRadius: 18, borderWidth: 1.5, borderColor: border, backgroundColor: 'rgba(4,10,22,0.7)', paddingHorizontal: 16, color: C.white, fontFamily: F.display, fontSize: 20, letterSpacing: 2, textTransform: 'uppercase' }}
+          style={{ height: 56, borderRadius: 18, borderWidth: 1.5, borderColor: border, backgroundColor: 'rgba(4,10,22,0.7)', paddingHorizontal: 16, color: C.white, fontFamily: F.display, fontSize: 20, letterSpacing: 0, textTransform: 'uppercase' }}
         />
         {ghost && !value && (
           <Animated.Text pointerEvents="none" numberOfLines={1}
-            style={[{ position: 'absolute', left: 17, right: 16, top: 15, fontFamily: F.display, fontSize: 20, letterSpacing: 2, color: C.coral }, ghostStyle]}>
+            style={[{ position: 'absolute', left: 17, right: 16, top: 15, fontFamily: F.display, fontSize: 20, letterSpacing: 0, color: C.coral }, ghostStyle]}>
             {ghost.text.toUpperCase()}
           </Animated.Text>
         )}
