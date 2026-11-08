@@ -14,7 +14,7 @@ import { DailyChallenges, LevelCard, RewardsTab, SweepBorder } from './Progress'
 import { MatchFaces } from './MatchFaces';
 import { SettingsScreen } from './Settings';
 import { SaveProgressNudge } from './SignIn';
-import { ChallengeScreen, ChallengesScreen, FriendsScreen, InviteRecoveryBanner, InviteScreen, NotificationsScreen, PlayerScreen, ProfileBody } from './Social';
+import { ChallengeScreen, ChallengesScreen, FriendsScreen, InviteRecoveryBanner, InviteScreen, NotificationsScreen, PlayerScreen, PlayerSearchScreen, ProfileBody } from './Social';
 import { C, F, w } from './theme';
 
 type Tab = 'play' | 'ranks' | 'rewards' | 'profile';
@@ -274,7 +274,13 @@ function RanksTab({ account, refreshKey }: { account: Account; refreshKey: numbe
 
   return (
     <View>
-      <Text style={s.h1}>Ranks</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={s.h1}>Ranks</Text>
+        <Pressable onPress={() => nav.push({ name: 'search' })} hitSlop={10} accessibilityRole="button" accessibilityLabel="Find players"
+          style={({ pressed }) => ({ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? w(0.08) : 'transparent' })}>
+          <Text style={{ fontSize: 21 }}>🔍</Text>
+        </Pressable>
+      </View>
       <Text style={{ fontFamily: F.body, fontSize: 14, color: w(0.72), marginTop: 4 }}>{mode === '1v1' ? `${t.sub} · All time` : `${t.sub} · ${periodRange(period, new Date(now))}`}</Text>
       <View style={{ gap: 8, marginTop: 16 }}>
         <Segmented options={MODES} value={mode} onChange={setMode} />
@@ -397,7 +403,7 @@ function NoticeToast({ text }: { text: string }) {
 // ── Pages over the tabs (Settings, Friends, Challenges…) ───────────────────
 const ROUTE_TITLE: Record<Route['name'], string> = {
   settings: 'Settings', friends: 'Friends', challenges: '1v1 challenges', challenge: '1v1 challenge',
-  player: 'Player', notifications: 'Notifications', invite: 'Invite',
+  player: 'Player', notifications: 'Notifications', invite: 'Invite', search: 'Find players',
 };
 
 function RoutePage({ route, account }: { route: Route; account: Account }) {
@@ -433,6 +439,7 @@ function RoutePage({ route, account }: { route: Route; account: Account }) {
           {route.name === 'challenges' && <ChallengesScreen tab={route.tab} />}
           {route.name === 'player' && <PlayerScreen id={route.id} />}
           {route.name === 'notifications' && <NotificationsScreen />}
+          {route.name === 'search' && <PlayerSearchScreen />}
           {route.name === 'invite' && <InviteScreen token={route.token} />}
         </Animated.View>
       </ScrollView>

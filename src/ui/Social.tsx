@@ -129,35 +129,30 @@ export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 
   const [tab, setTab] = useState<'friends' | 'requests'>(initial);
   const list = useLoad(myFriends, []);
   const [q, setQ] = useState('');
-  const [results, setResults] = useState<SearchRow[] | null>(null);
-  const [searchErr, setSearchErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
-  const term = q.trim();
-  useEffect(() => {
-    if (term.length < 2) return;
-    let live = true;
-    const t = setTimeout(() => {
-      searchPlayers(term).then((r) => { if (live) { setResults(r); setSearchErr(null); } })
-        .catch((e) => { if (live) setSearchErr(friendlyError(e, "Couldn't search right now.")); });
-    }, 300);
-    return () => { live = false; clearTimeout(t); };
-  }, [term]);
-  const shown = term.length >= 2 ? results : null;
-
   const act = async (id: string, fn: () => Promise<unknown>) => {
     setBusy(id);
-    try { await fn(); list.reload(); if (results) setResults(await searchPlayers(q.trim())); }
+    try { await fn(); list.reload(); }
     catch (e) { setNote(friendlyError(e)); }
     finally { setBusy(null); }
   };
   const invite = async () => { const e = await shareFriendInvite(); if (e) setNote(e); };
 
   const all = list.data ?? [];
-  const incoming = all.filter((f) => f.relation === 'received');
-  const outgoing = all.filter((f) => f.relation === 'sent');
-  const friends = all.filter((f) => f.relation === 'friends');
+  // The search box filters your friends and requests by name (finding new players is on Ranks → 🔍).
+  const term = q.trim().toLowerCase();
+  const match = (f: FriendRow) => !term || f.name.toLowerCase().includes(term);
+  const incomingAll = all.filter((f) => f.relation === 'received');
+  const outgoingAll = all.filter((f) => f.relation === 'sent');
+  const friendsAll = all.filter((f) => f.relation === 'friends');
+  const incoming = incomingAll.filter(match);
+  const outgoing = outgoingAll.filter(match);
+  const friends = friendsAll.filter(match);
+  const noMatch = (
+    <Text style={[sub, { marginTop: 14, textAlign: 'center' }]}>{`No one matches "${q.trim()}".`}</Text>
+  );
 
   return (
     <View>
@@ -169,38 +164,26 @@ export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 
       </Card>
       {note && <Text style={{ marginTop: 10, fontFamily: F.body, fontSize: 13, color: C.coral, textAlign: 'center' }} onPress={() => setNote(null)}>{note}</Text>}
 
-      <Eyebrow>Find players</Eyebrow>
-      <TextField value={q} onChangeText={setQ} placeholder="Search by name" autoCorrect={false} autoCapitalize="none"
-        returnKeyType="search" accessibilityLabel="Search players by name" style={{ height: 46, borderRadius: 14, fontSize: 16, fontFamily: F.body, letterSpacing: 0 }} />
-      {searchErr && <ErrorText text={searchErr} />}
-      {shown && shown.length === 0 && <Text style={[sub, { marginTop: 10, textAlign: 'center' }]}>No players found.</Text>}
-      {shown && shown.length > 0 && (
-        <View style={{ gap: 6, marginTop: 8 }}>
-          {shown.map((r) => (
-            <PlayerRow key={r.user_id} p={{ id: r.user_id, name: r.name, photo_url: r.photo_url }} subtitle={r.region ?? undefined}
-              right={<RelationButton rel={r.relation} busy={busy === r.user_id}
-                onAdd={() => void act(r.user_id, () => sendFriendRequest(r.user_id))}
-                onAccept={() => void act(r.user_id, () => respondFriendRequest(r.user_id, true))} />} />
-          ))}
-        </View>
-      )}
-
       {list.error && <ErrorText text={list.error} onRetry={list.reload} />}
       {!list.data && !list.error && <Loading />}
 
       {list.data && (
-        <View style={{ marginTop: 24 }}>
+        <View style={{ marginTop: 24, gap: 10 }}>
           <Segmented value={tab} onChange={setTab} options={[
-            { id: 'friends' as const, label: `Friends${friends.length ? ` · ${friends.length}` : ''}` },
-            { id: 'requests' as const, label: `Requests${incoming.length + outgoing.length ? ` · ${incoming.length + outgoing.length}` : ''}` },
+            { id: 'friends' as const, label: `Friends${friendsAll.length ? ` · ${friendsAll.length}` : ''}` },
+            { id: 'requests' as const, label: `Requests${incomingAll.length + outgoingAll.length ? ` · ${incomingAll.length + outgoingAll.length}` : ''}` },
           ]} />
+          {all.length > 0 && (
+            <TextField value={q} onChangeText={setQ} placeholder="Search friends" autoCorrect={false} autoCapitalize="none"
+              returnKeyType="search" accessibilityLabel="Search friends" style={{ height: 46, borderRadius: 14, fontSize: 16, fontFamily: F.body, letterSpacing: 0 }} />
+          )}
         </View>
       )}
 
       {list.data && tab === 'friends' && (
-        friends.length === 0 ? (
-          <View style={{ marginTop: 12 }}><Empty emoji="🤝" title="No friends yet" body="Invite friends, or search for players by name to add them." /></View>
-        ) : (
+        friendsAll.length === 0 ? (
+          <View style={{ marginTop: 12 }}><Empty emoji="🤝" title="No friends yet" body="Invite friends, or find players on Ranks with 🔍 to add them." /></View>
+        ) : friends.length === 0 ? noMatch : (
           <View style={{ gap: 6, marginTop: 12 }}>
             {friends.map((f) => <FriendRowView key={f.user_id} f={f} />)}
           </View>
@@ -208,9 +191,9 @@ export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 
       )}
 
       {list.data && tab === 'requests' && (
-        incoming.length + outgoing.length === 0 ? (
+        incomingAll.length + outgoingAll.length === 0 ? (
           <View style={{ marginTop: 12 }}><Empty emoji="📭" title="No friend requests" body="Requests you get and send show up here." /></View>
-        ) : (
+        ) : incoming.length + outgoing.length === 0 ? noMatch : (
           <>
             {incoming.length > 0 && (
               <>
@@ -220,8 +203,8 @@ export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 
                     <PlayerRow key={f.user_id} p={{ id: f.user_id, name: f.name, photo_url: f.photo_url }} subtitle="Wants to be friends"
                       right={(
                         <View style={{ flexDirection: 'row', gap: 6 }}>
-                          <SmallButton title="Accept" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => respondFriendRequest(f.user_id, true))} />
                           <SmallButton title="Decline" variant="ghost" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => respondFriendRequest(f.user_id, false))} />
+                          <SmallButton title="Accept" disabled={busy === f.user_id} onPress={() => void act(f.user_id, () => respondFriendRequest(f.user_id, true))} />
                         </View>
                       )} />
                   ))}
@@ -242,7 +225,50 @@ export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 
           </>
         )
       )}
+    </View>
+  );
+}
 
+/** Find any player by name (opened from 🔍 on Ranks): add them, or open their profile. */
+export function PlayerSearchScreen() {
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState<SearchRow[] | null>(null);
+  const [searchErr, setSearchErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const term = q.trim();
+  useEffect(() => {
+    if (term.length < 2) return;
+    let live = true;
+    const t = setTimeout(() => {
+      searchPlayers(term).then((r) => { if (live) { setResults(r); setSearchErr(null); } })
+        .catch((e) => { if (live) setSearchErr(friendlyError(e, "Couldn't search right now.")); });
+    }, 300);
+    return () => { live = false; clearTimeout(t); };
+  }, [term]);
+  const shown = term.length >= 2 ? results : null;
+  const act = async (id: string, fn: () => Promise<unknown>) => {
+    setBusy(id);
+    try { await fn(); setResults(await searchPlayers(term)); }
+    catch (e) { toast.show(friendlyError(e)); }
+    finally { setBusy(null); }
+  };
+  return (
+    <View>
+      <TextField value={q} onChangeText={setQ} placeholder="Search players by name" autoFocus autoCorrect={false} autoCapitalize="none"
+        returnKeyType="search" accessibilityLabel="Search players by name" style={{ height: 46, borderRadius: 14, fontSize: 16, fontFamily: F.body, letterSpacing: 0 }} />
+      {!shown && <Text style={[sub, { marginTop: 10, textAlign: 'center' }]}>Type at least 2 letters to search everyone on Last Word.</Text>}
+      {searchErr && <ErrorText text={searchErr} />}
+      {shown && shown.length === 0 && <Text style={[sub, { marginTop: 10, textAlign: 'center' }]}>No players found.</Text>}
+      {shown && shown.length > 0 && (
+        <View style={{ gap: 6, marginTop: 10 }}>
+          {shown.map((r) => (
+            <PlayerRow key={r.user_id} p={{ id: r.user_id, name: r.name, photo_url: r.photo_url }} subtitle={r.region ?? undefined}
+              right={<RelationButton rel={r.relation} busy={busy === r.user_id}
+                onAdd={() => void act(r.user_id, () => sendFriendRequest(r.user_id))}
+                onAccept={() => void act(r.user_id, () => respondFriendRequest(r.user_id, true))} />} />
+          ))}
+        </View>
+      )}
     </View>
   );
 }

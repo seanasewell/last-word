@@ -9,6 +9,7 @@ export type Route =
   | { name: 'challenge'; id: string }
   | { name: 'player'; id: string }
   | { name: 'notifications' }
+  | { name: 'search' }
   | { name: 'invite'; token: string };
 
 let stack: Route[] = [];
