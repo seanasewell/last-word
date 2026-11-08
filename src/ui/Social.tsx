@@ -147,8 +147,9 @@ export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 
   const incomingAll = all.filter((f) => f.relation === 'received');
   const outgoingAll = all.filter((f) => f.relation === 'sent');
   const friendsAll = all.filter((f) => f.relation === 'friends');
-  const incoming = incomingAll.filter(match);
-  const outgoing = outgoingAll.filter(match);
+  // Requests aren't searched (the search box is only on the Friends tab).
+  const incoming = incomingAll;
+  const outgoing = outgoingAll;
   const friends = friendsAll.filter(match);
   const noMatch = (
     <Text style={[sub, { marginTop: 14, textAlign: 'center' }]}>{`No one matches "${q.trim()}".`}</Text>
@@ -172,7 +173,7 @@ export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 
             { id: 'friends' as const, label: `Friends${friendsAll.length ? ` · ${friendsAll.length}` : ''}` },
             { id: 'requests' as const, label: `Requests${incomingAll.length + outgoingAll.length ? ` · ${incomingAll.length + outgoingAll.length}` : ''}` },
           ]} />
-          {all.length > 0 && (
+          {tab === 'friends' && friendsAll.length > 0 && (
             <TextField value={q} onChangeText={setQ} placeholder="Search friends" autoCorrect={false} autoCapitalize="none"
               returnKeyType="search" accessibilityLabel="Search friends" style={{ height: 46, borderRadius: 14, fontSize: 16, fontFamily: F.body, letterSpacing: 0 }} />
           )}
@@ -192,7 +193,7 @@ export function FriendsScreen({ tab: initial = 'friends' }: { tab?: 'friends' | 
       {list.data && tab === 'requests' && (
         incomingAll.length + outgoingAll.length === 0 ? (
           <View style={{ marginTop: 12 }}><Empty emoji="📭" title="No friend requests" body="Requests you get and send show up here." /></View>
-        ) : incoming.length + outgoing.length === 0 ? noMatch : (
+        ) : (
           <>
             {incoming.length > 0 && (
               <>
