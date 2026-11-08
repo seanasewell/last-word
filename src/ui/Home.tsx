@@ -146,7 +146,6 @@ function PlayTab({ best, account }: { best: number; account: Account }) {
 const PERIODS: { id: Period; label: string; phrase: string }[] = [
   { id: 'week', label: 'Week', phrase: 'this week' },
   { id: 'month', label: 'Month', phrase: 'this month' },
-  { id: 'year', label: 'Year', phrase: 'this year' },
   { id: 'all', label: 'All time', phrase: 'all time' },
 ];
 const fmtDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
