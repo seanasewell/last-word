@@ -86,12 +86,13 @@ export function LastWordApp() {
   // Back on the home screen: pick up any XP the server awarded.
   useEffect(() => { if (g.phase === 'menu') void progress.refresh(); }, [g.phase]);
 
-  // Music: the rounds track from a game's first round (and for solo), the championship track
-  // for the final 1v1; each keeps going through breaks and results, and fades out on the menu.
+  // Music: the rounds track for solo and rounds 1–4, the championship track for the final 1v1.
+  // Every round starts its track from the top (each track is as long as a round); the music
+  // fades out on the menu.
   const inRound = g.phase === 'sp-playing' || g.phase === 'round';
   const championship = inRound && g.mode === 'multi' && g.players.filter((p) => p.status === 'active').length === 2;
   const musicTrack = championship ? 'championship' : 'rounds';
-  const gameKey = inRound ? g.matchId : null;
+  const gameKey = inRound ? `${g.matchId}:${g.round}` : null;
   useEffect(() => { if (gameKey) startGameMusic(gameKey, musicTrack); }, [gameKey, musicTrack]);
   useEffect(() => { if (g.phase === 'menu' || g.phase === 'lobby' || g.phase === 'sp-countdown') stopGameMusic(); }, [g.phase]);
   // Round results: the win song if you got through or won the championship, the loss song if you

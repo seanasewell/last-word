@@ -58,9 +58,9 @@ export function initSound() {
 
 // ── Background music ──
 // Two tracks play quietly during games so sound effects sit on top: "rounds" for solo and
-// elimination rounds 1–4, "championship" for the final 1v1. A track starts when its round
-// begins and keeps looping through the breaks between rounds and on the results; moving to the
-// championship crossfades to its track, and back on the menu the music fades out.
+// elimination rounds 1–4, "championship" for the final 1v1. Each track is as long as a round and
+// starts from the top every round; moving to the championship crossfades to its track, and back
+// on the menu the music fades out.
 // Between rounds and after the championship, the track pauses and a 10-second result song
 // plays instead: "win" if you got through (or won), "loss" if you were knocked out.
 // Its own setting; paused in the background.
@@ -72,6 +72,21 @@ const TRACKS: Record<MusicTrack, number> = {
   championship: require('@/assets/sounds/championship.m4a'),
 };
 const musicPlayers = new Map<MusicTrack, AudioPlayer>();
+// Players that have started playing; a used one is replaced, never rewound, when its track starts again.
+const usedTracks = new WeakSet<AudioPlayer>();
+const spares = new Map<MusicTrack, AudioPlayer>();
+function spareTrack(track: MusicTrack): AudioPlayer | null {
+  try {
+    let p = spares.get(track);
+    if (!p) {
+      p = createAudioPlayer(TRACKS[track], SONG);
+      p.loop = true;
+      p.volume = MUSIC_VOLUME;
+      spares.set(track, p);
+    }
+    return p;
+  } catch { return null; }
+}
 export type ResultMusic = 'win' | 'loss';
 const RESULTS: Record<ResultMusic, number> = {
   win: require('@/assets/sounds/win.m4a'),
@@ -102,7 +117,8 @@ function trackPlayer(track: MusicTrack): AudioPlayer | null {
   try {
     let m = musicPlayers.get(track);
     if (!m) {
-      m = createAudioPlayer(TRACKS[track], SONG);
+      m = spares.get(track) ?? createAudioPlayer(TRACKS[track], SONG);
+      spares.delete(track);
       m.loop = true;
       m.volume = MUSIC_VOLUME;
       musicPlayers.set(track, m);
@@ -151,23 +167,31 @@ function resumeMusic() {
 }
 
 /**
- * A round began. Starts `track` from the top, unless this game is already playing it (so the
- * music runs straight through rounds 1–4); switching track fades the other one out.
+ * A round began: start `track` from the top on a fresh player (rewinding a used one can land
+ * mid-song), and fade out any other track. `gameId` changes every round.
  */
 export function startGameMusic(gameId: string, track: MusicTrack) {
   stopResultMusic();
-  // Same game and track (the next round): carry on from where it paused.
+  // The same round again (say the screen re-rendered): just make sure it's playing.
   if (inGame && currentGame === gameId && currentTrack === track) { resumeMusic(); return; }
   currentGame = gameId;
   inGame = true;
   musicPlayers.forEach((_, t) => { if (t !== track) fadeOut(t); });
   currentTrack = track;
-  const m = trackPlayer(track);
-  if (!m || !musicEnabled()) return;
+  // Throw away the player that played this track last round; a spare loaded at the start takes over.
   cancelFade(track);
-  // Start right away; never wait on the seek (on some devices its promise never settles).
-  m.seekTo(0).catch(() => {});
+  const used = musicPlayers.get(track);
+  if (used && usedTracks.has(used)) {
+    musicPlayers.delete(track);
+    try { used.pause(); } catch { /* already gone */ }
+    try { used.remove(); } catch { /* already gone */ }
+  }
+  const m = trackPlayer(track);
+  if (!m) return;
+  usedTracks.add(m);
   resumeMusic();
+  // Load the next round's spare.
+  setTimeout(() => { spareTrack(track); }, 500);
 }
 
 // Each result song gets a fresh player that's thrown away when it stops, so a song never has to be
