@@ -170,28 +170,27 @@ export function startGameMusic(gameId: string, track: MusicTrack) {
   resumeMusic();
 }
 
+// Each result song gets a fresh player that's thrown away when it stops, so a song never has to be
+// rewound (rewinding a finished song could restart it on its own). A spare per song is loaded
+// ahead of time so it starts instantly.
+let activeResult: AudioPlayer | null = null;
+
 function stopResultMusic() {
   resultOn = false;
-  resultToken++;
-  resultPlayers.forEach((p) => { if (p.playing) p.pause(); });
+  const p = activeResult;
+  activeResult = null;
+  if (!p) return;
+  try { p.pause(); } catch { /* already gone */ }
+  try { p.remove(); } catch { /* already gone */ }
 }
-
-// Bumped whenever a result song starts or stops, so a late seek can't start a song that's no longer wanted.
-let resultToken = 0;
 
 function resultPlayer(kind: ResultMusic): AudioPlayer | null {
   try {
     let p = resultPlayers.get(kind);
     if (!p) {
-      const made = createAudioPlayer(RESULTS[kind], SONG);
-      made.volume = MUSIC_VOLUME;
-      // When a song plays to the end, the player sits at the end, and play() there does nothing
-      // (or ends at once). Rewind it straight away so it's ready for the next round.
-      made.addListener('playbackStatusUpdate', (st) => {
-        if (st.didJustFinish) made.seekTo(0).catch(() => {});
-      });
-      resultPlayers.set(kind, made);
-      p = made;
+      p = createAudioPlayer(RESULTS[kind], SONG);
+      p.volume = MUSIC_VOLUME;
+      resultPlayers.set(kind, p);
     }
     return p;
   } catch { return null; }
@@ -204,23 +203,15 @@ export function playResultMusic(kind: ResultMusic) {
   if (!musicEnabled() || !appActive) return;
   const p = resultPlayer(kind);
   if (!p) return;
+  // Hand the spare over to play, and load a new spare for next time.
+  resultPlayers.delete(kind);
+  activeResult = p;
   resultOn = true;
-  const token = resultToken;
-  p.volume = MUSIC_VOLUME;
   try {
-    // Already at the start (the usual case): play now.
-    if (p.currentTime < 0.25) { p.play(); return; }
-    // Otherwise rewind first, then play. Playing before the rewind lands can leave the song
-    // silent, and on some devices the seek's promise never settles, so a short timer backs it up.
-    let started = false;
-    const go = () => {
-      if (started || token !== resultToken) return;
-      started = true;
-      try { p.play(); } catch { /* audio unavailable */ }
-    };
-    p.seekTo(0).then(go, go);
-    setTimeout(go, 400);
+    p.volume = MUSIC_VOLUME;
+    p.play();
   } catch { /* audio unavailable */ }
+  setTimeout(() => resultPlayer(kind), 500);
 }
 
 /** Back on the menu: fade the music out. */
