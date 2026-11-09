@@ -52,7 +52,7 @@ export function initSound() {
   trackPlayer('rounds');
   trackPlayer('championship');
   (Object.keys(RESULTS) as ResultMusic[]).forEach((k) => {
-    try { const p = createAudioPlayer(RESULTS[k], SONG); p.volume = MUSIC_VOLUME; resultPlayers.set(k, p); } catch { /* audio unavailable */ }
+    resultPlayer(k);
   });
 }
 
@@ -172,7 +172,29 @@ export function startGameMusic(gameId: string, track: MusicTrack) {
 
 function stopResultMusic() {
   resultOn = false;
+  resultToken++;
   resultPlayers.forEach((p) => { if (p.playing) p.pause(); });
+}
+
+// Bumped whenever a result song starts or stops, so a late seek can't start a song that's no longer wanted.
+let resultToken = 0;
+
+function resultPlayer(kind: ResultMusic): AudioPlayer | null {
+  try {
+    let p = resultPlayers.get(kind);
+    if (!p) {
+      const made = createAudioPlayer(RESULTS[kind], SONG);
+      made.volume = MUSIC_VOLUME;
+      // When a song plays to the end, the player sits at the end, and play() there does nothing
+      // (or ends at once). Rewind it straight away so it's ready for the next round.
+      made.addListener('playbackStatusUpdate', (st) => {
+        if (st.didJustFinish) made.seekTo(0).catch(() => {});
+      });
+      resultPlayers.set(kind, made);
+      p = made;
+    }
+    return p;
+  } catch { return null; }
 }
 
 /** A round's result: pause the game track (it picks up again next round) and play the result song once. */
@@ -180,13 +202,24 @@ export function playResultMusic(kind: ResultMusic) {
   if (currentTrack) fadeOut(currentTrack);
   stopResultMusic();
   if (!musicEnabled() || !appActive) return;
+  const p = resultPlayer(kind);
+  if (!p) return;
+  resultOn = true;
+  const token = resultToken;
+  p.volume = MUSIC_VOLUME;
   try {
-    let p = resultPlayers.get(kind);
-    if (!p) { p = createAudioPlayer(RESULTS[kind], SONG); p.volume = MUSIC_VOLUME; resultPlayers.set(kind, p); }
-    resultOn = true;
-    p.seekTo(0).catch(() => {});
-    p.volume = MUSIC_VOLUME;
-    p.play();
+    // Already at the start (the usual case): play now.
+    if (p.currentTime < 0.25) { p.play(); return; }
+    // Otherwise rewind first, then play. Playing before the rewind lands can leave the song
+    // silent, and on some devices the seek's promise never settles, so a short timer backs it up.
+    let started = false;
+    const go = () => {
+      if (started || token !== resultToken) return;
+      started = true;
+      try { p.play(); } catch { /* audio unavailable */ }
+    };
+    p.seekTo(0).then(go, go);
+    setTimeout(go, 400);
   } catch { /* audio unavailable */ }
 }
 
